@@ -9,6 +9,7 @@ class SimilarityMetric(ABC):
 
     def __init__(self, vectorized: bool, similarity: bool):
         self.vectorized = vectorized
+        # -- True if a similarity measure, False if distance metric
         self.similarity = similarity
 
     @abstractmethod
@@ -48,6 +49,7 @@ class ICCBRMetric(SimilarityMetric):
         return self.w / (1 + cumprod_euclidean) + (1 - self.w) * nmc
 
     def compute_matrix_pairwise(self, matrix):
+        matrix = matrix.T
         m, n = matrix.shape
 
         similarity_matrix = np.zeros((n, n))
@@ -132,39 +134,30 @@ def get_target_context_sets(
 
     for t in tqdm(range(0, T - period, stride), disable=not verbose):
         X_slice = X[:, t : t + period]
-        sim_matrix = compute_similarity_matrix(X_slice, metric_class)
-        tgt_context_sets.extend(extract_indices(sim_matrix, context_size))
+        metric_matrix = metric_class.compute_matrix_pairwise(X_slice)
+        tgt_context_sets.extend(
+            extract_indices(metric_matrix, context_size, metric_class)
+        )
 
     return tgt_context_sets
 
 
-def compute_similarity_matrix(X_slice, metric_class):
-    """
-    Compute the similarity matrix for a given slice of data and a metric.
-
-    Args:
-        X_slice (np.array): Sliced data for a specific window.
-        metric_class (SimilarityMetric): Metric class for computing similarities.
-
-    Returns:
-        np.array: Computed similarity matrix.
-    """
-    return metric_class.compute_matrix_pairwise(
-        X_slice.T if isinstance(metric_class, ICCBRMetric) else X_slice
-    )
-
-
-def extract_indices(sim_matrix, context_size):
+def extract_indices(
+    metric_matrix: np.array, context_size: int, metric_class: SimilarityMetric
+):
     """
     Extract indices of context time series based on the similarity matrix.
 
     Args:
-        sim_matrix (np.array): Similarity matrix.
+        metric_matrix (np.array): Output from metric class pairwise matrix.
         context_size (int): Number of context time series in each set.
-
+        metric_class (SimilarityMetric): Metric class - needed here to
+            determine whether it is a similarity or distance for correct ordering.
     Returns:
         list: List of tuples (target_index, [context_indices]).
     """
+    multiplier = 1 if metric_class.similarity else -1
+    sim_matrix = multiplier * metric_matrix
     np.fill_diagonal(sim_matrix, -1)
     indices = np.argpartition(sim_matrix, -context_size, axis=1)[:, -context_size:]
     return [(i, list(xi)) for i, xi in enumerate(indices)]
