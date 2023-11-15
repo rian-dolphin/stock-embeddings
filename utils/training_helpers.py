@@ -10,9 +10,9 @@ LEARNING_RATE = 0.0001
 LOSS_THRESHOLD = 0.0002
 
 
-def validate_params(model, embedding_dim, idx_combinations):
-    if idx_combinations is None:
-        raise ValueError("idx_combinations must be provided for training.")
+def validate_params(model, embedding_dim, tgt_context_sets):
+    if tgt_context_sets is None:
+        raise ValueError("tgt_context_sets must be provided for training.")
 
     if model is None and embedding_dim is None:
         raise ValueError("If no model is provided, embedding_dim must be specified.")
@@ -25,9 +25,9 @@ def initialize_model(model_class, n_time_series, embedding_dim):
     return model_class(n_time_series, embedding_dim)
 
 
-def get_train_loader(idx_combinations, batch_size=64):
-    x_vals = np.array([idx[1] for idx in idx_combinations])
-    y_vals = np.array([idx[0] for idx in idx_combinations])
+def get_train_loader(tgt_context_sets, batch_size=64):
+    x_vals = np.array([idx[1] for idx in tgt_context_sets])
+    y_vals = np.array([idx[0] for idx in tgt_context_sets])
 
     x_train_tensor = torch.from_numpy(x_vals).long()
     y_train_tensor = torch.from_numpy(y_vals).long()
@@ -40,16 +40,16 @@ def should_early_stop(losses, epoch):
     return epoch > 2 and abs(losses[-1] - losses[-2]) < LOSS_THRESHOLD
 
 
-def train_embeddings_from_idx_combinations(
+def train_embeddings_from_tgt_context_sets(
     n_time_series,
-    idx_combinations=None,
+    tgt_context_sets=None,
     model=None,
     epochs=20,
     embedding_dim=None,
     device="cpu",
     verbose=True,
 ):
-    validate_params(model, embedding_dim, idx_combinations)
+    validate_params(model, embedding_dim, tgt_context_sets)
 
     if model is None:
         model = initialize_model(BaseModel, n_time_series, embedding_dim)
@@ -58,7 +58,7 @@ def train_embeddings_from_idx_combinations(
 
     loss_function = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    train_loader = get_train_loader(idx_combinations)
+    train_loader = get_train_loader(tgt_context_sets)
 
     if verbose:
         print("Training embeddings...")
