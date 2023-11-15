@@ -1,13 +1,9 @@
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
 from imblearn.over_sampling import SMOTE
-from sklearn.metrics import (
-    f1_score,
-    precision_score,
-    recall_score,
-)  # , top_k_accuracy_score
+from sklearn.metrics import f1_score  # , top_k_accuracy_score
+from sklearn.metrics import precision_score, recall_score
+from sklearn.model_selection import StratifiedKFold
 from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
 
 
 def get_sector_score(
@@ -58,5 +54,7 @@ def get_sector_score(
     print(f"Precision Score: {np.round(np.mean(precision_list),2)}")
     print(f"Recall Score: {np.round(np.mean(recall_list),2)}")
     print(f"F1 Score: {np.round(np.mean(f1_list),2)}")
+    print(f"Accuracy Score: {np.round(np.mean(accuracy_list),2)}")
+    # print(f'Accuracy Score Top-{k}: {np.round(np.mean(accuracy_list_top_k),2)}')
     print(f"Accuracy Score: {np.round(np.mean(accuracy_list),2)}")
     # print(f'Accuracy Score Top-{k}: {np.round(np.mean(accuracy_list_top_k),2)}')
