@@ -1,7 +1,8 @@
-import numpy as np
-from tqdm import tqdm
 from abc import ABC, abstractmethod
+
+import numpy as np
 from scipy.spatial.distance import pdist, squareform
+from tqdm import tqdm
 
 
 class SimilarityMetric(ABC):
@@ -128,7 +129,7 @@ def get_target_context_sets(
     Returns:
         list: Target-context sets in the format [(target_index, [context_indices]), ...].
     """
-    T, n_time_series = X.shape[1], X.shape[0]
+    T = X.shape[1]
     if stride is None:
         stride = window_length
     tgt_context_sets = []
@@ -161,4 +162,5 @@ def extract_indices(
     sim_matrix = multiplier * metric_matrix
     np.fill_diagonal(sim_matrix, -1)
     indices = np.argpartition(sim_matrix, -context_size, axis=1)[:, -context_size:]
+    return [(i, list(xi)) for i, xi in enumerate(indices)]
     return [(i, list(xi)) for i, xi in enumerate(indices)]
