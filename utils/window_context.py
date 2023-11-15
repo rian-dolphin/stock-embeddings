@@ -110,7 +110,7 @@ class Euclidean(SimilarityMetric):
 def get_target_context_sets(
     X,
     metric_class: SimilarityMetric,
-    period=5,
+    window_length=5,
     stride=None,
     context_size=4,
     verbose=True,
@@ -121,19 +121,20 @@ def get_target_context_sets(
     Args:
         X (np.array): Array of time series (num_time_series, num_time_periods).
         metric_class (SimilarityMetric): Metric class for computing similarities.
-        period (int): Window size. Defaults to 5.
-        stride (int): Step size. Defaults to period for non-overlapping windows.
+        window_length (int): Window size. Defaults to 5.
+        stride (int): Step size. Defaults to window_length for non-overlapping windows.
         context_size (int): Number of context time series in each set. Defaults to 4.
 
     Returns:
         list: Target-context sets in the format [(target_index, [context_indices]), ...].
     """
     T, n_time_series = X.shape[1], X.shape[0]
-    stride = stride or period
+    if stride is None:
+        stride = window_length
     tgt_context_sets = []
 
-    for t in tqdm(range(0, T - period, stride), disable=not verbose):
-        X_slice = X[:, t : t + period]
+    for t in tqdm(range(0, T - window_length, stride), disable=not verbose):
+        X_slice = X[:, t : t + window_length]
         metric_matrix = metric_class.compute_matrix_pairwise(X_slice)
         tgt_context_sets.extend(
             extract_indices(metric_matrix, context_size, metric_class)
