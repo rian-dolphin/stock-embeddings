@@ -1,10 +1,11 @@
-import numpy as np
-from tqdm import tqdm
 from typing import List, Tuple
+
+import numpy as np
 from pandas import DataFrame
+from tqdm import tqdm
 
 
-def get_contextual_indices(
+def get_pointwise_tgt_context_sets(
     df: DataFrame,
     context_size: int = 4,
     verbose: bool = False,
