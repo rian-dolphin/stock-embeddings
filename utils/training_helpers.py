@@ -1,4 +1,4 @@
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type
 
 import numpy as np
 import torch
@@ -57,7 +57,7 @@ def train_embeddings_from_tgt_context_sets(
     device: str = "cpu",
     early_stopping: bool = True,
     verbose: bool = True,
-) -> List[float]:
+) -> Tuple[nn.Module, List[float]]:
     validate_params(model, embedding_dim, tgt_context_sets)
 
     if model is None:
