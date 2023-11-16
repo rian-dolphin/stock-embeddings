@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 from torch import nn, optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+
 from models.base_model import BaseModel
 
 # Constants
@@ -117,7 +118,7 @@ def train_model(
 
             optimizer.zero_grad()
             log_probs = model(x_batch)
-            loss = loss_function(log_probs.squeeze(), y_batch)
+            loss = loss_function(log_probs, y_batch)
             loss.backward()
             optimizer.step()
 
