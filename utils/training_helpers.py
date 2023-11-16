@@ -83,7 +83,7 @@ def train_embeddings_from_tgt_context_sets(
         verbose,
     )
 
-    return losses
+    return model, losses
 
 
 def train_model(
