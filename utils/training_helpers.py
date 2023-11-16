@@ -1,3 +1,5 @@
+from typing import List, Optional, Type
+
 import numpy as np
 import torch
 from torch import nn, optim
@@ -7,11 +9,13 @@ from tqdm import tqdm
 from models.base_model import BaseModel
 
 # Constants
-LEARNING_RATE = 0.0001
-LOSS_THRESHOLD = 0.0002
+LEARNING_RATE: float = 0.0001
+LOSS_THRESHOLD: float = 0.0002
 
 
-def validate_params(model, embedding_dim, tgt_context_sets):
+def validate_params(
+    model: Optional[nn.Module], embedding_dim: Optional[int], tgt_context_sets: list
+) -> None:
     if tgt_context_sets is None:
         raise ValueError("tgt_context_sets must be provided for training.")
 
@@ -22,11 +26,13 @@ def validate_params(model, embedding_dim, tgt_context_sets):
         raise ValueError("Do not provide embedding_dim when a model is given.")
 
 
-def initialize_model(model_class, n_time_series, embedding_dim):
+def initialize_model(
+    model_class: Type[BaseModel], n_time_series: int, embedding_dim: int
+) -> nn.Module:
     return model_class(n_time_series, embedding_dim)
 
 
-def get_train_loader(tgt_context_sets, batch_size=64):
+def get_train_loader(tgt_context_sets: list, batch_size: int = 64) -> DataLoader:
     x_vals = np.array([idx[1] for idx in tgt_context_sets])
     y_vals = np.array([idx[0] for idx in tgt_context_sets])
 
@@ -37,21 +43,21 @@ def get_train_loader(tgt_context_sets, batch_size=64):
     return DataLoader(train_data, batch_size=batch_size, shuffle=True, drop_last=True)
 
 
-def should_early_stop(losses, epoch):
+def should_early_stop(losses: List[float], epoch: int) -> bool:
     return epoch > 2 and abs(losses[-1] - losses[-2]) < LOSS_THRESHOLD
 
 
 def train_embeddings_from_tgt_context_sets(
-    n_time_series,
-    tgt_context_sets=None,
-    model=None,
-    epochs=20,
-    batch_size=64,
-    embedding_dim=None,
-    device="cpu",
+    n_time_series: int,
+    tgt_context_sets: Optional[list] = None,
+    model: Optional[nn.Module] = None,
+    epochs: int = 20,
+    batch_size: int = 64,
+    embedding_dim: Optional[int] = None,
+    device: str = "cpu",
     early_stopping: bool = True,
-    verbose=True,
-):
+    verbose: bool = True,
+) -> List[float]:
     validate_params(model, embedding_dim, tgt_context_sets)
 
     if model is None:
@@ -66,7 +72,7 @@ def train_embeddings_from_tgt_context_sets(
     if verbose:
         print("Training embeddings...")
 
-    losses = train_model(
+    model, losses = train_model(
         epochs,
         model,
         loss_function,
