@@ -1,19 +1,20 @@
-import torch.nn as nn
-import torch
 import numpy as np
+import torch
+import torch.nn as nn
+
 
 class BaseModel(nn.Module):
     """
     Base class for stock modelling embeddings.
     """
 
-    def __init__(self, device='cpu'):
+    def __init__(self, device="cpu"):
         super(BaseModel, self).__init__()
         self.embeddings = None
         self.device = torch.device(device)
 
-    def initialize_parameters(self, method='xavier_uniform'):
-        if method == 'xavier_uniform':
+    def initialize_parameters(self, method="xavier_uniform"):
+        if method == "xavier_uniform":
             nn.init.xavier_uniform_(self.embeddings.weight)
         # Add other initialization methods as needed
 
@@ -34,7 +35,9 @@ class BaseModel(nn.Module):
         raise NotImplementedError("Loss calculation method not implemented.")
 
     def load_embeddings_from_numpy(self, embed_array):
-        self.embeddings = nn.Embedding.from_pretrained(torch.from_numpy(embed_array), freeze=False)
+        self.embeddings = nn.Embedding.from_pretrained(
+            torch.from_numpy(embed_array), freeze=False
+        )
         print(f"Number of Time Series: {self.embeddings.weight.shape[0]}")
         print(f"Embedding Dimension: {self.embeddings.weight.shape[1]}")
 
