@@ -46,8 +46,10 @@ def train_embeddings_from_tgt_context_sets(
     tgt_context_sets=None,
     model=None,
     epochs=20,
+    batch_size=64,
     embedding_dim=None,
     device="cpu",
+    early_stopping: bool = True,
     verbose=True,
 ):
     validate_params(model, embedding_dim, tgt_context_sets)
@@ -59,13 +61,20 @@ def train_embeddings_from_tgt_context_sets(
 
     loss_function = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    train_loader = get_train_loader(tgt_context_sets)
+    train_loader = get_train_loader(tgt_context_sets, batch_size=batch_size)
 
     if verbose:
         print("Training embeddings...")
 
     losses = train_model(
-        epochs, model, loss_function, optimizer, train_loader, device, verbose
+        epochs,
+        model,
+        loss_function,
+        optimizer,
+        train_loader,
+        device,
+        early_stopping,
+        verbose,
     )
 
     return losses
@@ -78,6 +87,7 @@ def train_model(
     optimizer: optim.Optimizer,
     train_loader: DataLoader,
     device: str = "cpu",
+    early_stopping: bool = True,
     verbose: bool = True,
 ) -> list:
     """
@@ -130,7 +140,7 @@ def train_model(
         if verbose:
             print(f"Epoch {epoch}: Loss = {epoch_loss}")
 
-        if should_early_stop(losses, epoch):
+        if early_stopping & should_early_stop(losses, epoch):
             if verbose:
                 print(f"Early stopping at epoch {epoch} due to minimal loss reduction.")
             break
