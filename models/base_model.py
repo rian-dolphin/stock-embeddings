@@ -13,16 +13,26 @@ class BaseModel(nn.Module):
         self.embeddings = None
         self.device = torch.device(device)
 
-    def initialize_parameters(self, method="xavier_uniform"):
-        if method == "xavier_uniform":
-            nn.init.xavier_uniform_(self.embeddings.weight)
-        # Add other initialization methods as needed
-
     def save_model(self, path):
         torch.save(self.state_dict(), path)
 
-    def load_model(self, path):
-        self.load_state_dict(torch.load(path, map_location=self.device))
+    @classmethod
+    def load_model(cls, path, device="cpu"):
+        # Load the state dict from the file
+        state_dict = torch.load(path, map_location=torch.device(device))
+
+        # Infer n_time_series and embedding_dim from the embeddings layer
+        # Assuming the name of the embeddings layer in the state_dict is 'embeddings.weight'
+        n_time_series, embedding_dim = state_dict["embeddings.weight"].shape
+
+        # Create an instance of the cls with the inferred dimensions
+        model = cls(n_time_series, embedding_dim)
+        model.to(torch.device(device))
+
+        # Load the state dict into the model
+        model.load_state_dict(state_dict)
+
+        return model
 
     def to_device(self, device):
         self.device = torch.device(device)
@@ -52,10 +62,3 @@ class BaseModel(nn.Module):
     def calculate_loss(self, output, target):
         # Implement a common method for calculating loss if applicable
         raise NotImplementedError("Loss calculation method not implemented.")
-
-    def validate(self, validation_loader):
-        # Implement validation logic
-        pass
-
-    # Additional methods like logging, regularization etc.
-    # ...
