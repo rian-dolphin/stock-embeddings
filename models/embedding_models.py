@@ -7,6 +7,7 @@ from models.base_model import BaseModel
 class ClassificationEmbeddings(BaseModel):
     """
     Model architecture similar to CBOW Word2Vec but adapted for stock modelling.
+    Can be thought of as classifying the target stock given context.ß
     """
 
     def __init__(self, n_time_series: int, embedding_dim: int):
@@ -16,7 +17,8 @@ class ClassificationEmbeddings(BaseModel):
     def forward(self, inputs):
         # -- This extracts the relevant rows of the embedding matrix
         # - Equivalent to W^T x_i in "word2vec Parameter Learning Explained"
-        context_embeddings = self.embeddings(inputs)  # (batch_size, embed_dim)
+        # (batch_size, n_time_series, embed_dim)
+        context_embeddings = self.embeddings(inputs)
 
         # -- Compute the hidden layer by a simple mean
         hidden = context_embeddings.mean(axis=1)  # (n_time_series, embed_dim)
