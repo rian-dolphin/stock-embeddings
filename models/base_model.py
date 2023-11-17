@@ -42,6 +42,7 @@ class BaseModel(nn.Module):
         raise NotImplementedError("Forward method not implemented.")
 
     def calculate_loss(self, output, target):
+        # Implement a common method for calculating loss if applicable
         raise NotImplementedError("Loss calculation method not implemented.")
 
     def load_embeddings_from_numpy(self, embed_array):
@@ -58,7 +59,3 @@ class BaseModel(nn.Module):
         if fname.split(".")[1] != "csv":
             raise ValueError("You must include .csv in your file name")
         np.savetxt(fname, self.embeddings.weight.detach().numpy(), delimiter=",")
-
-    def calculate_loss(self, output, target):
-        # Implement a common method for calculating loss if applicable
-        raise NotImplementedError("Loss calculation method not implemented.")
