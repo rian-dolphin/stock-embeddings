@@ -9,7 +9,7 @@ from sktime.datasets import load_UCR_UEA_dataset
 
 class UCR_Data:
     NUM_FROM_CLASS = 5
-    PLOTLY_COLORS = px.colors.qualitative.Plotly
+    PLOTLY_COLORS = px.colors.qualitative.Plotly + px.colors.qualitative.D3
     PLOTLY_TEMPLATE = "plotly_dark"
     DATA_LOAD_TYPE = "numpy2d"
 
