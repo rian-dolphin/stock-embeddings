@@ -39,7 +39,8 @@ class MatrixFactorization(BaseModel):
         self, n_time_series: int, embedding_dim: int, normalize: bool = False
     ) -> None:
         super().__init__()
-
+        self.n_time_series: int = n_time_series
+        self.embedding_dim: int = embedding_dim
         self.embeddings = nn.Embedding(n_time_series, embedding_dim)
         if normalize:
             self.normalize_embeddings()
