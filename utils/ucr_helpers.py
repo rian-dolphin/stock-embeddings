@@ -1,9 +1,11 @@
-from collections import defaultdict
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import torch
+from imblearn.over_sampling import RandomOverSampler
+from sklearn.metrics import classification_report
+from sklearn.neural_network import MLPClassifier
 from sktime.datasets import load_UCR_UEA_dataset
 
 
@@ -14,6 +16,7 @@ class UCR_Data:
     DATA_LOAD_TYPE = "numpy2d"
 
     def __init__(self, name: str) -> None:
+        self.name = name
         self.load_data(name)
         self.process_data()
 
@@ -81,3 +84,54 @@ class UCR_Data:
 
     def __str__(self) -> str:
         return f"UCR Data: {self.length} length, {self.n_classes} classes"
+
+
+def evaluate_model_sklearn(
+    embeddings_train: np.ndarray,
+    embeddings_test: np.ndarray,
+    y_train: np.ndarray,
+    y_test: np.ndarray,
+    classifier=MLPClassifier(),
+    over_sampling: bool = True,
+    verbose: bool = False,
+) -> float:
+    """
+    Evaluate a machine learning model using scikit-learn.
+
+    Args:
+        embeddings_train: Training data embeddings.
+        embeddings_test: Test data embeddings.
+        y_train: Training data labels.
+        y_test: Test data labels.
+        classifier: The classifier to use. Defaults to MLPClassifier.
+        over_sampling: Whether to apply oversampling. Defaults to True.
+        verbose: Whether to print detailed classification report. Defaults to False.
+
+    Returns:
+        The accuracy of the model on the test data.
+    """
+    if over_sampling:
+        sm = RandomOverSampler()
+        X_train_oversampled, y_train_oversampled = sm.fit_resample(
+            embeddings_train, y_train
+        )
+        classifier.fit(X_train_oversampled, y_train_oversampled)
+    else:
+        classifier.fit(embeddings_train, y_train)
+
+    # Predict and evaluate
+    y_preds = classifier.predict(embeddings_test)
+    report = classification_report(y_true=y_test, y_pred=y_preds, output_dict=True)
+    if verbose:
+        print(classification_report(y_true=y_test, y_pred=y_preds))
+    accuracy = report["accuracy"]
+    return accuracy
+
+
+def get_kNN_accuracy_MF_UCR(data, model, k=1):
+    case_base = model.embeddings.weight.detach()[: data.X_train.shape[0], :]
+    test_embeddings = model.embeddings.weight.detach()[data.X_train.shape[0] :, :]
+    temp = torch.einsum("nd, md->nm", case_base, test_embeddings)
+    temp = [data.y_train[i] for i in torch.argmax(temp, dim=0)]
+    accuracy = np.mean(temp == data.y_test)
+    return accuracy

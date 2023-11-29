@@ -1,6 +1,12 @@
+from collections import defaultdict
+from typing import Any, List, Tuple
+
+import numpy as np
+import plotly.graph_objects as go
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 
 from models.base_model import BaseModel
 
@@ -55,6 +61,20 @@ class MatrixFactorization(BaseModel):
         )  # (n_time_series, n_time_series)
         return pairwise_similarities
 
+    @staticmethod
+    def get_correlation_matrix(X: np.ndarray, scaled=True):
+        correlations = torch.tensor(np.corrcoef(X))
+        if not scaled:
+            return correlations
+
+        off_diagonal_elements = correlations[np.triu_indices_from(correlations, k=1)]
+
+        scaled_correlations = (correlations - off_diagonal_elements.min()) / (
+            off_diagonal_elements.max() - off_diagonal_elements.min()
+        )
+        scaled_correlations = 2 * scaled_correlations - 1
+        return scaled_correlations
+
     def calculate_loss(
         self,
         similarity_matrix1: torch.Tensor,
@@ -98,3 +118,144 @@ class MatrixFactorization(BaseModel):
         )
 
         return loss_value
+
+    @staticmethod
+    def train_MF_model(
+        n_time_series: int,
+        similarity_matrix: torch.Tensor,
+        embedding_dim: int = 20,
+        learning_rate: float = 0.02,
+        epochs: int = 300,
+        regularization_loss_weight: float = 0.1,
+        pairwise_loss_weight: float = 0.1,
+        verbose: bool = True,
+    ) -> Tuple["MatrixFactorization", List[Tuple[float, float, float]], List[float]]:
+        """
+        Trains the MatrixFactorization model.
+
+        Args:
+            n_time_series: Number of time series in the dataset (train and test)
+            similarity_matrix: The similarity matrix tensor used for training.
+            embedding_dim: Dimension of the embedding space.
+            learning_rate: Learning rate for the optimizer.
+            epochs: Number of training epochs.
+            regularization_loss_weight: Weight of the regularization loss.
+            pairwise_loss_weight: Weight of the pairwise loss.
+            verbose: If True, print verbose messages during training.
+
+        Returns:
+            A tuple containing the trained model, list of losses, and learning rates.
+        """
+
+        # Initialize model
+        model = MatrixFactorization(
+            n_time_series=n_time_series, embedding_dim=embedding_dim, normalize=True
+        )
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.8, patience=10, threshold=0.1
+        )
+
+        # Function to calculate losses
+        def calculate_losses(
+            model: "MatrixFactorization", correlations: torch.Tensor
+        ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            pairwise_similarity = model()
+            pairwise_loss = pairwise_loss_weight * model.calculate_loss(
+                correlations,
+                pairwise_similarity,
+                loss_function=torch.nn.functional.l1_loss,
+            )
+            regularization_loss = (
+                regularization_loss_weight
+                * torch.abs(torch.linalg.norm(model.embeddings.weight, dim=1) - 1).sum()
+            )
+            total_loss = pairwise_loss + regularization_loss
+            return total_loss, pairwise_loss, regularization_loss
+
+        # Training loop
+        losses: List[Tuple[float, float, float]] = []
+        learning_rates: List[float] = []
+
+        for epoch in tqdm(range(epochs), disable=not verbose):
+            optimizer.zero_grad()
+            total_loss, pairwise_loss, regularization_loss = calculate_losses(
+                model, similarity_matrix
+            )
+            total_loss.backward()
+            optimizer.step()
+            scheduler.step(pairwise_loss)
+
+            # Logging losses and learning rates
+            losses.append(
+                (total_loss.item(), pairwise_loss.item(), regularization_loss.item())
+            )
+            learning_rates.append(optimizer.param_groups[0]["lr"])
+
+        return model, losses, learning_rates
+
+    @staticmethod
+    def plot_embedding_training(
+        losses, learning_rates, verbose: bool = True, return_fig: bool = False
+    ):
+        # Unpack the losses
+        total_losses, pairwise_losses, regularization_losses = zip(*losses)
+
+        # Create a figure
+        fig = go.Figure()
+
+        # Add traces for pairwise and regularization losses
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(total_losses))),
+                y=pairwise_losses,
+                mode="lines",
+                name="Total Loss",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(pairwise_losses))),
+                y=pairwise_losses,
+                mode="lines",
+                name="Pairwise Loss",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(regularization_losses))),
+                y=regularization_losses,
+                mode="lines",
+                name="Regularization Loss",
+            )
+        )
+
+        # Create a secondary y-axis for the total loss
+        fig.update_layout(
+            yaxis=dict(title="Pairwise and Regularization Loss"),
+            yaxis2=dict(title="Learning Rate", overlaying="y", side="right"),
+        )
+
+        # Add the total loss trace
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(learning_rates))),
+                y=learning_rates,
+                mode="lines",
+                name="Learning rate",
+                yaxis="y2",
+            )
+        )
+
+        # Update layout
+        fig.update_layout(
+            title="Losses During Training", xaxis_title="Epoch", yaxis_title="Loss"
+        )
+        fig.update_layout(template="plotly_dark")
+
+        # Show the figure
+        if verbose:
+            print(f"Final pairwise_loss: {pairwise_losses[-1]}")
+            fig.show()
+        if return_fig:
+            return fig
