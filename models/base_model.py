@@ -59,3 +59,8 @@ class BaseModel(nn.Module):
         if fname.split(".")[1] != "csv":
             raise ValueError("You must include .csv in your file name")
         np.savetxt(fname, self.embeddings.weight.detach().numpy(), delimiter=",")
+
+    @staticmethod
+    def _validate_tensor(x):
+        if not isinstance(x, torch.Tensor):
+            raise ValueError(f"Found {type(x)} rather than torch.Tensor")

@@ -1,11 +1,12 @@
 from collections import defaultdict
-from typing import Any, List, Tuple
+from typing import List, Literal, Tuple
 
 import numpy as np
 import plotly.graph_objects as go
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dtaidistance import dtw
 from tqdm import tqdm
 
 from models.base_model import BaseModel
@@ -62,18 +63,91 @@ class MatrixFactorization(BaseModel):
         return pairwise_similarities
 
     @staticmethod
-    def get_correlation_matrix(X: np.ndarray, scaled=True):
-        correlations = torch.tensor(np.corrcoef(X))
-        if not scaled:
-            return correlations
+    def apply_excluding_diagonal(array: torch.Tensor, f=np.mean):
+        """Calculate the mean of a square numpy array excluding the diagonal elements."""
+        MatrixFactorization._validate_tensor(array)
+        if array.ndim != 2 or array.shape[0] != array.shape[1]:
+            raise ValueError("Input must be a square matrix.")
+        mask = torch.eye(array.shape[0], dtype=bool)
+        return f(array[~mask])
 
-        off_diagonal_elements = correlations[np.triu_indices_from(correlations, k=1)]
-
-        scaled_correlations = (correlations - off_diagonal_elements.min()) / (
-            off_diagonal_elements.max() - off_diagonal_elements.min()
+    @staticmethod
+    def bespoke_min_max_scale(square_matrix: torch.Tensor, exclude_diagonal=True):
+        if not exclude_diagonal:
+            raise NotImplementedError("Not implemented")
+        off_diagonal_elements = square_matrix[np.triu_indices_from(square_matrix, k=1)]
+        scaled = (square_matrix - off_diagonal_elements.min()) / (
+            square_matrix.max() - square_matrix.min()
         )
-        scaled_correlations = 2 * scaled_correlations - 1
-        return scaled_correlations
+        return 2 * scaled - 1
+
+    @staticmethod
+    def bespoke_normal_scale(square_matrix: torch.Tensor, exclude_diagonal=True):
+        if not exclude_diagonal:
+            raise NotImplementedError("Not implemented")
+        return (
+            square_matrix
+            - MatrixFactorization.apply_excluding_diagonal(square_matrix, f=torch.mean)
+        ) / MatrixFactorization.apply_excluding_diagonal(square_matrix, f=torch.std)
+
+    @staticmethod
+    def handle_scaling(
+        square_matrix: torch.Tensor,
+        scaled: Literal["min_max", "normal", False],
+        exclude_diagonal: bool = True,
+    ):
+        if not exclude_diagonal:
+            raise NotImplementedError("Not implemented with diagonal")
+        if not scaled:
+            return square_matrix
+        elif scaled == "min_max":
+            return MatrixFactorization.bespoke_min_max_scale(
+                square_matrix, exclude_diagonal=exclude_diagonal
+            )
+        elif scaled == "normal":
+            return MatrixFactorization.bespoke_normal_scale(
+                square_matrix, exclude_diagonal=exclude_diagonal
+            )
+        else:
+            raise ValueError("`scaled` must be one of [False, 'min_max', 'normal']")
+
+    @staticmethod
+    def get_correlation_matrix(
+        X: np.ndarray, scaled: Literal["min_max", "normal", False]
+    ):
+        correlation_matrix = torch.tensor(np.corrcoef(X))
+        if not scaled:
+            return correlation_matrix
+        else:
+            return MatrixFactorization.handle_scaling(
+                correlation_matrix, scaled=scaled, exclude_diagonal=True
+            )
+
+    @staticmethod
+    def get_dtw_matrix(
+        X: np.ndarray,
+        max_warping_window: int | None = None,
+        return_similarity: bool = False,
+        scaled: Literal["min_max", "normal", False] = False,
+        verbose=True,
+    ):
+        if verbose & (not return_similarity):
+            print(
+                "Warning: This returns a distance matrix not a similarity matrix. Use `return_similarity=True`for corresponding similarity matrix"
+            )
+        return_matrix = dtw.distance_matrix_fast(
+            s=X, max_length_diff=max_warping_window
+        )
+        if scaled:
+            return_matrix = MatrixFactorization.handle_scaling(
+                return_matrix, scaled=scaled, exclude_diagonal=True
+            )
+        if return_similarity:
+            return_matrix = -return_matrix
+            np.fill_diagonal(return_matrix, np.inf)
+            return return_matrix
+        else:
+            return return_matrix
 
     def calculate_loss(
         self,
@@ -95,6 +169,13 @@ class MatrixFactorization(BaseModel):
         Returns:
             torch.Tensor: The calculated loss.
         """
+        # Check if inputs are numpy arrays
+        if isinstance(similarity_matrix1, np.ndarray) or isinstance(
+            similarity_matrix2, np.ndarray
+        ):
+            raise TypeError(
+                "similarity_matrix1 and similarity_matrix2 must be torch tensors, not numpy arrays"
+            )
 
         # Ensure that the input matrices are square and of the same size
         assert (
@@ -105,7 +186,7 @@ class MatrixFactorization(BaseModel):
         ), "Matrices must be square."
 
         # Create a mask for non-diagonal elements
-        n = similarity_matrix1.size(0)
+        n = similarity_matrix1.shape[0]
         mask = torch.eye(n, dtype=torch.bool).logical_not()
 
         # Apply the mask
