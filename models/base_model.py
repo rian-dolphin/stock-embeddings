@@ -1,6 +1,10 @@
 import numpy as np
+import pandas as pd
+import plotly.express as px
 import torch
 import torch.nn as nn
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 
 class BaseModel(nn.Module):
@@ -64,3 +68,51 @@ class BaseModel(nn.Module):
     def _validate_tensor(x):
         if not isinstance(x, torch.Tensor):
             raise ValueError(f"Found {type(x)} rather than torch.Tensor")
+
+    @staticmethod
+    def plot_with_dimensionality_reduction(
+        embeddings: np.ndarray, labels: list, method="pca"
+    ):
+        # check the method chosen by the user and apply accordingly
+        if method.lower() == "pca":
+            # apply PCA to reduce the dimensionality of the data to 2D
+            reduction = PCA(n_components=2)
+        elif method.lower() == "tsne":
+            # apply t-SNE to reduce the dimensionality of the data to 2D
+            reduction = TSNE(n_components=2)
+        else:
+            raise ValueError("Invalid method. Choose 'pca' or 'tsne'.")
+
+        reduced_data = reduction.fit_transform(embeddings)
+
+        # convert the reduced data, class labels, and entity names to a pandas DataFrame for plotting
+        df = pd.DataFrame(
+            {"x": reduced_data[:, 0], "y": reduced_data[:, 1], "label": labels}
+        )
+        df = df.sort_values(by="label")
+
+        # plot the data using plotly, colored by the class labels
+        fig = px.scatter(df, x="x", y="y", color="label", hover_name="label")
+        # Update layout for smaller margins and academic style
+        fig.update_layout(
+            template="simple_white",  # Simple and clean layout
+            margin=dict(l=20, r=20, b=20, t=20),  # Smaller margins
+            font=dict(
+                family="Arial", size=12, color="black"
+            ),  # Academic-style font and color
+            xaxis=dict(title=f"{method.upper()} Component 1", title_font=dict(size=14)),
+            yaxis=dict(title=f"{method.upper()} Component 2", title_font=dict(size=14)),
+            height=300,
+            width=500,
+            legend=dict(
+                title="Class",
+                # orientation="h",
+                # yanchor="bottom",
+                # y=1.02,
+                # xanchor="right",
+                # x=1,
+            ),
+        )
+        fig.update_traces(marker={"size": 4})
+        # fig.update_layout(template='plotly_dark')
+        fig.show()
