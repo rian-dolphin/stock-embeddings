@@ -238,7 +238,7 @@ class MatrixFactorization(BaseModel):
         )
 
         # Function to calculate losses
-        def calculate_losses(
+        def get_all_losses(
             model: "MatrixFactorization", correlations: torch.Tensor
         ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             pairwise_similarity = model()
@@ -260,7 +260,7 @@ class MatrixFactorization(BaseModel):
 
         for epoch in tqdm(range(epochs), disable=not verbose):
             optimizer.zero_grad()
-            total_loss, pairwise_loss, regularization_loss = calculate_losses(
+            total_loss, pairwise_loss, regularization_loss = get_all_losses(
                 model, similarity_matrix
             )
             total_loss.backward()
