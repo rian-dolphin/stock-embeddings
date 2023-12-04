@@ -19,6 +19,14 @@ class UCR_Data:
         self.name = name
         self.load_data(name)
         self.process_data()
+        self.summary = "\n".join(
+            [
+                f"Number of classes: {self.n_classes}",
+                f"Number of training samples: {self.X_train.shape[0]}",
+                f"Number of test samples: {self.X_test.shape[0]}",
+                f"Length of time series: {self.X.shape[1]}",
+            ]
+        )
 
     def load_data(self, name: str) -> None:
         try:
