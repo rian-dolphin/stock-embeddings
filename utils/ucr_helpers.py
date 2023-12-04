@@ -59,7 +59,14 @@ class UCR_Data:
             idxs_subset = np.random.choice(idxs, self.NUM_FROM_CLASS)
             for i in idxs_subset:
                 self._add_trace_to_fig(fig, c, i, diff)
-        fig.update_layout(template=self.PLOTLY_TEMPLATE)
+        fig.update_layout(
+            template=self.PLOTLY_TEMPLATE,
+            height=300,
+            width=600,
+            xaxis=dict(title="Time"),
+            yaxis=dict(title="Value"),
+            margin=dict(l=20, r=20, t=20, b=20),
+        )
         return fig
 
     def _get_classes(self) -> dict:
