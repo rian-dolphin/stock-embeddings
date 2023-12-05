@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dtaidistance import dtw
+from sklearn.metrics.pairwise import euclidean_distances
 from tqdm import tqdm
 
 from models.base_model import BaseModel
@@ -62,10 +63,10 @@ class MatrixFactorization(BaseModel):
         )  # (n_time_series, n_time_series)
         return pairwise_similarities
 
-    @staticmethod
-    def apply_excluding_diagonal(array: torch.Tensor, f=np.mean):
+    @classmethod
+    def apply_excluding_diagonal(cls, array: torch.Tensor, f=np.mean):
         """Calculate the mean of a square numpy array excluding the diagonal elements."""
-        MatrixFactorization._validate_tensor(array)
+        cls._validate_tensor(array)
         if array.ndim != 2 or array.shape[0] != array.shape[1]:
             raise ValueError("Input must be a square matrix.")
         mask = torch.eye(array.shape[0], dtype=bool)
@@ -81,55 +82,93 @@ class MatrixFactorization(BaseModel):
         )
         return 2 * scaled - 1
 
-    @staticmethod
-    def bespoke_normal_scale(square_matrix: torch.Tensor, exclude_diagonal=True):
+    @classmethod
+    def bespoke_normal_scale(cls, square_matrix: torch.Tensor, exclude_diagonal=True):
         if not exclude_diagonal:
             raise NotImplementedError("Not implemented")
         return (
-            square_matrix
-            - MatrixFactorization.apply_excluding_diagonal(square_matrix, f=torch.mean)
-        ) / MatrixFactorization.apply_excluding_diagonal(square_matrix, f=torch.std)
+            square_matrix - cls.apply_excluding_diagonal(square_matrix, f=torch.mean)
+        ) / cls.apply_excluding_diagonal(square_matrix, f=torch.std)
 
-    @staticmethod
+    @classmethod
     def handle_scaling(
+        cls,
         square_matrix: torch.Tensor,
         scaled: Literal["min_max", "normal", False],
         exclude_diagonal: bool = True,
+        truncate: bool = False,
     ):
+        if not scaled:
+            return square_matrix
+        return_matrix = square_matrix
         if not exclude_diagonal:
             raise NotImplementedError("Not implemented with diagonal")
         if not scaled:
-            return square_matrix
+            pass
         elif scaled == "min_max":
-            return MatrixFactorization.bespoke_min_max_scale(
+            return_matrix = cls.bespoke_min_max_scale(
                 square_matrix, exclude_diagonal=exclude_diagonal
             )
         elif scaled == "normal":
-            return MatrixFactorization.bespoke_normal_scale(
+            return_matrix = cls.bespoke_normal_scale(
                 square_matrix, exclude_diagonal=exclude_diagonal
             )
         else:
             raise ValueError("`scaled` must be one of [False, 'min_max', 'normal']")
+        if truncate:
+            return_matrix = torch.clamp(return_matrix, min=-2, max=2)
+        return return_matrix
 
-    @staticmethod
+    @classmethod
     def get_correlation_matrix(
-        X: np.ndarray, scaled: Literal["min_max", "normal", False]
+        cls,
+        X: np.ndarray,
+        scaled: Literal["min_max", "normal", False],
+        truncate: bool = False,
     ):
         correlation_matrix = torch.tensor(np.corrcoef(X))
-        if not scaled:
-            return correlation_matrix
-        else:
-            return MatrixFactorization.handle_scaling(
-                correlation_matrix, scaled=scaled, exclude_diagonal=True
-            )
+        correlation_matrix = cls.handle_scaling(
+            correlation_matrix, scaled=scaled, exclude_diagonal=True, truncate=truncate
+        )
+        correlation_matrix.fill_diagonal_(np.nan)
+        return correlation_matrix
 
-    @staticmethod
+    @classmethod
+    def get_euclidean_matrix(
+        cls,
+        X: np.ndarray,
+        scaled: Literal["min_max", "normal", False],
+        return_similarity: bool = False,
+        verbose: bool = True,
+        truncate: bool = False,
+    ):
+        if verbose & (not return_similarity):
+            print(
+                "Warning: This returns a distance matrix not a similarity matrix. Use `return_similarity=True`for corresponding similarity matrix"
+            )
+        return_matrix = euclidean_distances(X)
+        if not isinstance(return_matrix, torch.Tensor):
+            return_matrix = torch.tensor(return_matrix)
+        if not scaled:
+            pass
+        else:
+            return_matrix = cls.handle_scaling(
+                return_matrix, scaled=scaled, exclude_diagonal=True, truncate=truncate
+            )
+        if return_similarity:
+            return_matrix = -return_matrix
+        return_matrix.fill_diagonal_(np.nan)
+        return return_matrix
+
+    @classmethod
     def get_dtw_matrix(
+        cls,
         X: np.ndarray,
         max_warping_window: int | None = None,
         return_similarity: bool = False,
         scaled: Literal["min_max", "normal", False] = False,
         verbose=True,
+        truncate: bool = False,
     ):
         if verbose & (not return_similarity):
             print(
@@ -139,15 +178,14 @@ class MatrixFactorization(BaseModel):
             s=X, max_length_diff=max_warping_window
         )
         if scaled:
-            return_matrix = MatrixFactorization.handle_scaling(
-                return_matrix, scaled=scaled, exclude_diagonal=True
+            return_matrix = cls.handle_scaling(
+                return_matrix, scaled=scaled, exclude_diagonal=True, truncate=truncate
             )
         if return_similarity:
             return_matrix = -return_matrix
             np.fill_diagonal(return_matrix, np.inf)
-            return return_matrix
-        else:
-            return return_matrix
+        return_matrix.fill_diagonal_(np.nan)
+        return torch.tensor(return_matrix)
 
     def calculate_loss(
         self,
@@ -209,6 +247,7 @@ class MatrixFactorization(BaseModel):
         epochs: int = 300,
         regularization_loss_weight: float = 0.1,
         pairwise_loss_weight: float = 0.1,
+        early_stopping: bool = False,
         verbose: bool = True,
     ) -> Tuple["MatrixFactorization", List[Tuple[float, float, float]], List[float]]:
         """
@@ -233,8 +272,9 @@ class MatrixFactorization(BaseModel):
             n_time_series=n_time_series, embedding_dim=embedding_dim, normalize=True
         )
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        PATIENCE = 10
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.8, patience=10, threshold=0.1
+            optimizer, mode="min", factor=0.8, patience=PATIENCE, threshold=0.1
         )
 
         # Function to calculate losses
@@ -257,7 +297,9 @@ class MatrixFactorization(BaseModel):
         # Training loop
         losses: List[Tuple[float, float, float]] = []
         learning_rates: List[float] = []
-
+        # - Keep track of LR for early stopping
+        lr_latest = optimizer.param_groups[0]["lr"]
+        lr_epoch_changed = [0]
         for epoch in tqdm(range(epochs), disable=not verbose):
             optimizer.zero_grad()
             total_loss, pairwise_loss, regularization_loss = get_all_losses(
@@ -271,8 +313,18 @@ class MatrixFactorization(BaseModel):
             losses.append(
                 (total_loss.item(), pairwise_loss.item(), regularization_loss.item())
             )
-            learning_rates.append(optimizer.param_groups[0]["lr"])
-
+            lr = optimizer.param_groups[0]["lr"]
+            learning_rates.append(lr)
+            # -- If three consecutive patience are hit in lr scheduler then early stop
+            if early_stopping:
+                if lr < lr_latest:
+                    lr_latest = lr
+                    lr_epoch_changed.append(epoch)
+                    if len(lr_epoch_changed) < 4:
+                        pass
+                    elif all(np.diff(lr_epoch_changed)[-3:] == [PATIENCE + 1] * 3):
+                        print(f"Early stopping at epoch {epoch}")
+                        break
         return model, losses, learning_rates
 
     @staticmethod
@@ -330,9 +382,15 @@ class MatrixFactorization(BaseModel):
 
         # Update layout
         fig.update_layout(
-            title="Losses During Training", xaxis_title="Epoch", yaxis_title="Loss"
+            title="Losses During Training",
+            xaxis_title="Epoch",
+            yaxis_title="Loss",
+            template="plotly_dark",
+            height=300,
+            width=600,
+            margin=dict(l=20, r=20, t=20, b=20),
         )
-        fig.update_layout(template="plotly_dark")
+        fig.update_layout(legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.8))
 
         # Show the figure
         if verbose:
