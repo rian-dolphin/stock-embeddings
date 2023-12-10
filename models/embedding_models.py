@@ -192,6 +192,7 @@ class MatrixFactorization(BaseModel):
         similarity_matrix1: torch.Tensor,
         similarity_matrix2: torch.Tensor,
         loss_function=F.l1_loss,
+        noise_mask: bool = False,
     ):
         """Calculate loss between corresponding non-diagonal elements
         of two square matrices using a specified loss function.
@@ -203,6 +204,7 @@ class MatrixFactorization(BaseModel):
             similarity_matrix1 (torch.Tensor): A square matrix of shape (n, n).
             similarity_matrix2 (torch.Tensor): Another square matrix of shape (n, n).
             loss_function (callable): PyTorch loss function to be used for calculation.
+            noise_mask (bool): If True then only include extreme similarity values
 
         Returns:
             torch.Tensor: The calculated loss.
@@ -231,6 +233,21 @@ class MatrixFactorization(BaseModel):
         masked_sim_matrix1 = similarity_matrix1[mask]
         masked_sim_matrix2 = similarity_matrix2[mask]
 
+        if noise_mask:
+
+            def get_noise_mask(similarity_matrix: torch.Tensor, lower=None, upper=None):
+                if (lower is None) & (upper is None):
+                    lower = similarity_matrix.mean() - similarity_matrix.std()
+                    upper = similarity_matrix.mean() + similarity_matrix.std()
+                mask_greater_than = similarity_matrix > upper
+                mask_less_than = similarity_matrix < lower
+
+                return mask_greater_than | mask_less_than
+
+            mask = get_noise_mask(masked_sim_matrix1)
+            masked_sim_matrix1 = masked_sim_matrix1[mask]
+            masked_sim_matrix2 = masked_sim_matrix2[mask]
+
         # Calculate the loss using the provided loss function
         loss_value = loss_function(
             masked_sim_matrix1, masked_sim_matrix2, reduction="sum"
@@ -247,6 +264,7 @@ class MatrixFactorization(BaseModel):
         epochs: int = 300,
         regularization_loss_weight: float = 0.1,
         pairwise_loss_weight: float = 0.1,
+        noise_mask: bool = False,
         early_stopping: bool = False,
         verbose: bool = True,
     ) -> Tuple["MatrixFactorization", List[Tuple[float, float, float]], List[float]]:
@@ -261,6 +279,8 @@ class MatrixFactorization(BaseModel):
             epochs: Number of training epochs.
             regularization_loss_weight: Weight of the regularization loss.
             pairwise_loss_weight: Weight of the pairwise loss.
+            noise_mask (bool): If True then only include extreme similarity values
+            early_stopping (bool): Stop when loss function stops reducing (scheduler)
             verbose: If True, print verbose messages during training.
 
         Returns:
@@ -286,6 +306,7 @@ class MatrixFactorization(BaseModel):
                 correlations,
                 pairwise_similarity,
                 loss_function=torch.nn.functional.l1_loss,
+                noise_mask=noise_mask,
             )
             regularization_loss = (
                 regularization_loss_weight
