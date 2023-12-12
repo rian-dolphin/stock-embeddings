@@ -6,7 +6,9 @@ import torch
 from imblearn.over_sampling import RandomOverSampler
 from sklearn.metrics import classification_report
 from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import StandardScaler
 from sktime.datasets import load_UCR_UEA_dataset
+from sktime.transformations.panel.catch22 import Catch22
 
 
 class UCR_Data:
@@ -17,6 +19,7 @@ class UCR_Data:
 
     def __init__(self, name: str) -> None:
         self.name = name
+        self.c22 = None
         self.load_data(name)
         self.process_data()
         self.summary = "\n".join(
@@ -100,6 +103,12 @@ class UCR_Data:
     def __str__(self) -> str:
         return f"UCR Data: {self.length} length, {self.n_classes} classes"
 
+    def get_catch_22_features(self, X: np.ndarray):
+        if self.c22 is None:
+            self.c22 = Catch22()
+            self.c22.fit(self.X_train)
+        return self.c22.transform(self.sktime_from_numpy(X)).values
+
 
 def evaluate_model_sklearn(
     embeddings_train: np.ndarray,
@@ -107,6 +116,7 @@ def evaluate_model_sklearn(
     y_train: np.ndarray,
     y_test: np.ndarray,
     classifier=MLPClassifier(),
+    scale: bool = False,
     over_sampling: bool = True,
     verbose: bool = False,
 ) -> float:
@@ -125,6 +135,11 @@ def evaluate_model_sklearn(
     Returns:
         The accuracy of the model on the test data.
     """
+    if scale:
+        scaler = StandardScaler()
+        scaler.fit(embeddings_train)
+        embeddings_train = scaler.transform(embeddings_train)
+        embeddings_test = scaler.transform(embeddings_test)
     if over_sampling:
         sm = RandomOverSampler()
         X_train_oversampled, y_train_oversampled = sm.fit_resample(
