@@ -1,14 +1,23 @@
+from collections import Counter
+from typing import Tuple
+from warnings import simplefilter
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import torch
 from imblearn.over_sampling import RandomOverSampler
+from sklearn.exceptions import ConvergenceWarning, UndefinedMetricWarning
 from sklearn.metrics import classification_report
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 from sktime.datasets import load_UCR_UEA_dataset
 from sktime.transformations.panel.catch22 import Catch22
+from tqdm import tqdm
 
 
 class UCR_Data:
@@ -107,7 +116,39 @@ class UCR_Data:
         if self.c22 is None:
             self.c22 = Catch22()
             self.c22.fit(self.X_train)
-        return self.c22.transform(self.sktime_from_numpy(X)).values
+        X_train_c22 = self.c22.transform(self.sktime_from_numpy(self.X_train)).values
+        X_c22 = self.c22.transform(self.sktime_from_numpy(X)).values
+        _, X_c22_clean = self.clean_c22(X_train_c22, X_c22)
+        return X_c22_clean
+
+    @staticmethod
+    def clean_c22(
+        X_train: np.ndarray, X_test: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Remove columns from both training and test datasets where columns in the training set
+        contain NaN values or have uniform values across all rows.
+
+        Parameters:
+        - X_train (np.ndarray): A 2D NumPy array representing the training dataset.
+        - X_test (np.ndarray): A 2D NumPy array representing the test dataset.
+
+        Returns:
+        Tuple[np.ndarray, np.ndarray]: A tuple containing the cleaned training and test datasets.
+        """
+        # Identify columns with NaN values
+        cols_with_nan = np.any(np.isnan(X_train), axis=0)
+        # Identify columns with uniform values
+        cols_with_no_variance = np.isnan(np.var(X_train, axis=0)) | (
+            np.var(X_train, axis=0) == 0
+        )
+        # Combine columns to drop
+        cols_to_drop = cols_with_nan | cols_with_no_variance
+        # Drop columns from both arrays
+        X_train_cleaned = X_train[:, ~cols_to_drop]
+        X_test_cleaned = X_test[:, ~cols_to_drop]
+
+        return X_train_cleaned, X_test_cleaned
 
 
 def evaluate_model_sklearn(
@@ -151,11 +192,13 @@ def evaluate_model_sklearn(
 
     # Predict and evaluate
     y_preds = classifier.predict(embeddings_test)
-    report = classification_report(y_true=y_test, y_pred=y_preds, output_dict=True)
+    report = classification_report(
+        y_true=y_test, y_pred=y_preds, output_dict=True, digits=4
+    )
     if verbose:
-        print(classification_report(y_true=y_test, y_pred=y_preds))
+        print(classification_report(y_true=y_test, y_pred=y_preds, digits=3))
     accuracy = report["accuracy"]
-    return accuracy
+    return report, accuracy
 
 
 def get_kNN_accuracy_MF_UCR(data, model, k=1):
@@ -165,3 +208,256 @@ def get_kNN_accuracy_MF_UCR(data, model, k=1):
     temp = [data.y_train[i] for i in torch.argmax(temp, dim=0)]
     accuracy = np.mean(temp == data.y_test)
     return accuracy
+
+
+def stratified_resample(X_train, X_test, y_train, y_test, random_state=None):
+    """
+    Resampling approach to follow the time series bake off paper
+    https://link.springer.com/article/10.1007/s10618-016-0483-9
+
+    "We run the same 100 resample folds on each problem for every classifier. The
+    first fold is always the original train test split. The other resamples are stratified to
+    retain class distribution in the original train/trest splits."
+    """
+    # Calculate class distribution in original train/test split
+    train_dist = Counter(y_train)
+    test_dist = Counter(y_test)
+
+    X = np.concatenate([X_train, X_test], axis=0)
+    y = np.concatenate([y_train, y_test], axis=0)
+
+    X_train_res, y_train_res = [], []
+    X_test_res, y_test_res = [], []
+
+    for class_value in np.unique(y):
+        test_num = test_dist[class_value]
+        X_class = X[y == class_value]
+        y_class = y[y == class_value]
+        (
+            X_train_res_class,
+            X_test_res_class,
+            y_train_res_class,
+            y_test_res_class,
+        ) = train_test_split(
+            X_class,
+            y_class,
+            test_size=test_num,
+            shuffle=True,
+            random_state=random_state,
+        )
+
+        X_train_res.append(X_train_res_class)
+        y_train_res.append(y_train_res_class)
+        X_test_res.append(X_test_res_class)
+        y_test_res.append(y_test_res_class)
+
+    return (
+        np.concatenate(X_train_res),
+        np.concatenate(y_train_res),
+        np.concatenate(X_test_res),
+        np.concatenate(y_test_res),
+    )
+
+
+def evaluate_resampling_UCR(
+    X_train,
+    X_test,
+    y_train,
+    y_test,
+    n_resamples=50,
+    classifier=KNeighborsClassifier(n_neighbors=1, metric="euclidean"),
+    scale=False,
+    over_sampling=True,
+    verbose=True,
+):
+    # Store results
+    accuracies = []
+    reports = []
+
+    # First fold - original train/test split
+    report, accuracy = evaluate_model_sklearn(
+        X_train, X_test, y_train, y_test, classifier, scale, over_sampling
+    )
+    accuracies.append(accuracy)
+    reports.append(report["weighted avg"])
+
+    for i in tqdm(range(n_resamples - 1), disable=not verbose):
+        X_train_res, y_train_res, X_test_res, y_test_res = stratified_resample(
+            X_train, X_test, y_train, y_test, random_state=i
+        )
+
+        report, accuracy = evaluate_model_sklearn(
+            X_train_res,
+            X_test_res,
+            y_train_res,
+            y_test_res,
+            classifier,
+            scale,
+            over_sampling,
+        )
+
+        # Store results
+        accuracies.append(accuracy)
+        reports.append(report["weighted avg"])
+    aggregate_report = {
+        metric: sum(r[metric] for r in reports) / len(reports)
+        for metric in ["precision", "recall", "f1-score"]
+    }
+    aggregate_report["accuracy"] = np.mean(accuracies)
+    return aggregate_report, reports, accuracies
+
+
+def initialize_eval_df():
+    index = pd.MultiIndex(levels=[[], []], codes=[[], []], names=["dataset", "method"])
+    columns = ["precision", "recall", "f1-score", "accuracy"]
+    df = pd.DataFrame(columns=columns, index=index)
+    return df
+
+
+def get_eval_df(
+    data: UCR_Data,
+    embeddings: np.ndarray,
+    df=None,
+    n_resamples=20,
+    verbose=False,
+    scale=False,
+    suffix="",
+    suppress_warnings=True,
+):
+    if suppress_warnings:
+        simplefilter("ignore", category=ConvergenceWarning)
+        simplefilter("ignore", category=UndefinedMetricWarning)
+    if df is None:
+        df = initialize_eval_df()
+    name = data.name
+    over_sampling = True
+
+    train_size = data.X_train.shape[0]
+    embeddings_train = embeddings[:train_size, :]
+    embeddings_test = embeddings[train_size:, :]
+    y_train = data.y[:train_size]
+    y_test = data.y[train_size:]
+
+    c22_train = data.get_catch_22_features(X=data.X_train)
+    c22_test = data.get_catch_22_features(X=data.X_test)
+
+    def add_row(df, name, method, report):
+        temp = {
+            k: round(v, 3) for k, v in report["weighted avg"].items() if k != "support"
+        }
+        temp["accuracy"] = round(report["accuracy"], 3)
+        new_row = pd.DataFrame(
+            [list(temp.values())],
+            columns=list(temp.keys()),
+            index=pd.MultiIndex.from_tuples(
+                [(name, method)], names=["dataset", "method"]
+            ),
+        )
+        return pd.concat([df, new_row])
+
+    def add_row_from_aggregate_report(df, name, method, aggregate_report):
+        new_row = pd.DataFrame(
+            [list(aggregate_report.values())],
+            columns=list(aggregate_report.keys()),
+            index=pd.MultiIndex.from_tuples(
+                [(name, method)], names=["dataset", "method"]
+            ),
+        )
+        return pd.concat([df, new_row])
+
+    combined_train = np.concatenate([c22_train, embeddings_train], axis=1)
+    combined_test = np.concatenate([c22_test, embeddings_test], axis=1)
+    feature_pairs = (
+        ("proposed", embeddings_train, embeddings_test),
+        ("c22", c22_train, c22_test),
+        ("raw", data.X_train, data.X_test),
+        ("prop+c22", combined_train, combined_test),
+    )
+
+    for method, X_train, X_test in feature_pairs:
+        # -- Add MLP
+        if verbose:
+            print("Computing MLP")
+        report, _, _ = evaluate_resampling_UCR(
+            X_train,
+            X_test,
+            y_train,
+            y_test,
+            n_resamples=n_resamples,
+            classifier=MLPClassifier(alpha=0.001, max_iter=25),
+            over_sampling=over_sampling,
+            scale=scale,
+            verbose=verbose,
+        )
+        df = add_row_from_aggregate_report(df, name, method + " MLP" + suffix, report)
+        # -- Add SVC
+        if verbose:
+            print("Computing SVC")
+        report, _, _ = evaluate_resampling_UCR(
+            X_train,
+            X_test,
+            y_train,
+            y_test,
+            n_resamples=n_resamples,
+            classifier=SVC(kernel="rbf"),
+            over_sampling=over_sampling,
+            scale=scale,
+            verbose=verbose,
+        )
+        df = add_row_from_aggregate_report(df, name, method + " SVC" + suffix, report)
+        # -- Add KNN
+        if verbose:
+            print("Computing KNN")
+        report, _, _ = evaluate_resampling_UCR(
+            X_train,
+            X_test,
+            y_train,
+            y_test,
+            classifier=KNeighborsClassifier(n_neighbors=1, metric="euclidean"),
+            n_resamples=n_resamples,
+            over_sampling=False,
+            scale=scale,
+            verbose=verbose,
+        )
+        df = add_row_from_aggregate_report(df, name, method + " 1NN" + suffix, report)
+
+    return df.sort_index()
+
+
+def add_meta_info(df, meta_df):
+    df = df.copy()
+    df["Train Size"] = None
+    df["Test Size"] = None
+    df["Length"] = None
+    for d in df.index.get_level_values("dataset"):
+        row = meta_df.loc[d.lower()]
+        df.loc[df.index.get_level_values("dataset") == d, "Train Size"] = row["Train"]
+        df.loc[df.index.get_level_values("dataset") == d, "Test Size"] = row["Test"]
+        df.loc[df.index.get_level_values("dataset") == d, "Length"] = row["Length"]
+    df = df.set_index("Train Size", append=True)
+    df = df.set_index("Test Size", append=True)
+    df = df.set_index("Length", append=True)
+    df = df.reorder_levels([0, 2, 3, 4, 1])
+    return df
+
+
+def highlight_max_in_dataset(df, level, cols):
+    """
+    Highlight the maximum values in specified columns for each dataset in a multi-index DataFrame.
+    """
+    style_string = "background-color: green"
+    # style_string = "font-weight: bold"
+    # Initialize a DataFrame for styles
+    styles = pd.DataFrame("", index=df.index, columns=df.columns)
+
+    # Loop through each dataset
+    for dataset, group_df in df.groupby(level=level):
+        for col in cols:
+            # Find the max value in the column for the current dataset
+            max_val = group_df[col].max()
+            # Apply style to max value cells
+            styles.loc[(dataset,), col] = group_df[col].apply(
+                lambda x: style_string if x == max_val else ""
+            )
+
+    return styles
