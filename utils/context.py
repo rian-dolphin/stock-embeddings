@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import Iterable, List, Tuple
 
 import numpy as np
 from pandas import DataFrame
@@ -152,8 +152,50 @@ def compute_moving_avg_std_matrix(
 
 
 def get_tgt_context_euclidean_chunk(
-    i_range, ts_array, m, k, stride, z_normalize=True, verbose=True, top_k=True
-):
+    i_range: Iterable[int],
+    ts_array: np.ndarray,
+    m: int,
+    k: int,
+    stride: int,
+    z_normalize: bool = True,
+    verbose: bool = True,
+    top_k: bool = True,
+) -> List[Tuple[int, List[int]]]:
+    """
+    For each time series in the specified range, this function identifies k-nearest neighbors (k-NN) based on the
+    Euclidean distance between chunks of time series data. The function optionally normalizes the data using Z-normalization
+    before calculating distances.
+
+    Parameters
+    ----------
+    i_range : Iterable
+        An iterable (like a range or list) of indices indicating the time series within `ts_array` to be processed.
+        This is used within the multiprocessing.
+    ts_array : np.ndarray
+        A 2D numpy array where each row represents a time series.
+    m : int
+        The length of the window (number of consecutive elements) in each time series to consider for k-NN calculation.
+    k : int
+        The number of nearest neighbors to find for each window in the time series.
+    stride : int
+        The step size to move the window across the time series for subsequent k-NN calculations.
+    z_normalize : bool, optional
+        If True, the function will apply Z-normalization to the data (default is True).
+    verbose : bool, optional
+        If True, the function will display progress information (default is True).
+    top_k : bool, optional
+        Determines the nature of neighbors to find. If True, it finds the top k nearest neighbors; if False, it finds the bottom k (default is True).
+
+    Returns
+    -------
+    List[Tuple[int, List[int]]]
+        A list of tuples. Each tuple contains an index from `i_range` and a list of indices of the k-nearest neighbors for each processed window.
+
+    Notes
+    -----
+    - Z-normalization standardizes the time series by subtracting the mean and dividing by the standard deviation.
+    - This function is designed to process chunks of a larger dataset, typically in parallel with other chunks.
+    """
     # -- Flip sign in argpartition to get bottom k for negative pairs
     if top_k:
         sign = 1
@@ -190,8 +232,39 @@ def get_tgt_context_euclidean_chunk(
 
 
 def get_tgt_context_euclidean_multiprocess(
-    ts_array, m, k, stride=1, z_normalize=True, verbose=True, top_k=True
-):
+    ts_array: np.ndarray,
+    m: int,
+    k: int,
+    stride: int = 1,
+    z_normalize: bool = True,
+    verbose: bool = True,
+    top_k: bool = True,
+) -> List[Tuple[int, List[int]]]:
+    """
+    Find the k-nearest neighbors for each chunk of time series data in parallel using multiple processes.
+
+    Parameters
+    ----------
+    ts_array : np.ndarray
+        The array of time series data.
+    m : int
+        The window size for computing the moving average and standard deviation.
+    k : int
+        The number of nearest neighbors to find.
+    stride : int, optional
+        The step size for moving through the time series (default is 1).
+    z_normalize : bool, optional
+        A boolean indicating whether to Z-normalize the data (default is True).
+    verbose : bool, optional
+        A boolean indicating whether to display progress (default is True).
+    top_k : bool, optional
+        A boolean indicating whether to find the top k nearest neighbors (if True) or the bottom k (if False).
+
+    Returns
+    -------
+    List[Tuple[int, List[int]]]
+        A list of tuples, each containing an index from the time series array and a list of indices corresponding to the k-nearest neighbors.
+    """
     num_processes = cpu_count() - 1  # Get the number of CPU cores
     pool = Pool(num_processes)
 
