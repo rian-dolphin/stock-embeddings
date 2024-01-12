@@ -1,3 +1,4 @@
+import time
 from collections import Counter
 from typing import Tuple
 from warnings import simplefilter
@@ -9,14 +10,20 @@ import plotly.graph_objects as go
 import torch
 from imblearn.over_sampling import RandomOverSampler
 from sklearn.exceptions import ConvergenceWarning, UndefinedMetricWarning
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
 from sktime.datasets import load_UCR_UEA_dataset
+from sktime.datatypes._panel._convert import from_nested_to_2d_array
 from sktime.transformations.panel.catch22 import Catch22
+from sktime.transformations.panel.rocket import Rocket
+from sktime.transformations.panel.summarize import RandomIntervalFeatureExtractor
+from sktime.transformations.series.summarize import SummaryTransformer
 from tqdm import tqdm
 
 
@@ -28,7 +35,6 @@ class UCR_Data:
 
     def __init__(self, name: str) -> None:
         self.name = name
-        self.c22 = None
         self.load_data(name)
         self.process_data()
         self.summary = "\n".join(
@@ -112,17 +118,57 @@ class UCR_Data:
     def __str__(self) -> str:
         return f"UCR Data: {self.length} length, {self.n_classes} classes"
 
-    def get_catch_22_features(self, X: np.ndarray):
-        if self.c22 is None:
-            self.c22 = Catch22()
-            self.c22.fit(self.X_train)
-        X_train_c22 = self.c22.transform(self.sktime_from_numpy(self.X_train)).values
-        X_c22 = self.c22.transform(self.sktime_from_numpy(X)).values
-        _, X_c22_clean = self.clean_c22(X_train_c22, X_c22)
-        return X_c22_clean
+    @classmethod
+    def get_sktime_features_unsupervised(
+        cls, X_train: np.ndarray, X_test: np.ndarray, transformer=Catch22(), clean=True
+    ):
+        transformer.fit(cls.sktime_from_numpy(X_train))
+        X_train_transformed = transformer.transform(
+            cls.sktime_from_numpy(X_train)
+        ).values
+        X_test_transformed = transformer.transform(cls.sktime_from_numpy(X_test)).values
+
+        # -- Handle if returned as sktime nested dataframe
+        if X_train_transformed.shape[1] == 1:
+            X_train_transformed = from_nested_to_2d_array(X_train_transformed).values
+            X_test_transformed = from_nested_to_2d_array(X_test_transformed).values
+        if clean:
+            X_train_trans_cleaned, X_test_trans_cleaned = cls.clean_features(
+                X_train_transformed, X_test_transformed
+            )
+            return X_train_trans_cleaned, X_test_trans_cleaned
+        return X_train_transformed, X_test_transformed
+
+    @classmethod
+    def get_sktime_features_supervised(
+        cls,
+        X_train: np.ndarray,
+        X_test: np.ndarray,
+        y_train: np.ndarray,
+        transformer,
+        clean=True,
+    ):
+        transformer.fit(cls.sktime_from_numpy(X_train), y_train)
+        X_train_transformed = transformer.transform(
+            cls.sktime_from_numpy(X_train)
+        ).values
+        X_test_transformed = transformer.transform(cls.sktime_from_numpy(X_test)).values
+
+        # -- Handle if returned as sktime nested dataframe
+        if X_train_transformed.shape[1] == 1:
+            X_train_transformed = from_nested_to_2d_array(X_train_transformed).values
+            X_test_transformed = from_nested_to_2d_array(X_test_transformed).values
+
+        if clean:
+            X_train_trans_cleaned, X_test_trans_cleaned = cls.clean_features(
+                X_train_transformed, X_test_transformed
+            )
+            return X_train_trans_cleaned, X_test_trans_cleaned
+
+        return X_train_transformed, X_test_transformed
 
     @staticmethod
-    def clean_c22(
+    def clean_features(
         X_train: np.ndarray, X_test: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -321,16 +367,19 @@ def get_eval_df(
     n_resamples=20,
     verbose=False,
     scale=False,
+    over_sampling=True,
     suffix="",
     suppress_warnings=True,
 ):
+    """
+    Run a test over multiple samples and compare against various baselines
+    """
     if suppress_warnings:
         simplefilter("ignore", category=ConvergenceWarning)
         simplefilter("ignore", category=UndefinedMetricWarning)
     if df is None:
         df = initialize_eval_df()
     name = data.name
-    over_sampling = True
 
     train_size = data.X_train.shape[0]
     embeddings_train = embeddings[:train_size, :]
@@ -338,22 +387,29 @@ def get_eval_df(
     y_train = data.y[:train_size]
     y_test = data.y[train_size:]
 
-    c22_train = data.get_catch_22_features(X=data.X_train)
-    c22_test = data.get_catch_22_features(X=data.X_test)
-
-    def add_row(df, name, method, report):
-        temp = {
-            k: round(v, 3) for k, v in report["weighted avg"].items() if k != "support"
-        }
-        temp["accuracy"] = round(report["accuracy"], 3)
-        new_row = pd.DataFrame(
-            [list(temp.values())],
-            columns=list(temp.keys()),
-            index=pd.MultiIndex.from_tuples(
-                [(name, method)], names=["dataset", "method"]
-            ),
-        )
-        return pd.concat([df, new_row])
+    fit_times = {}
+    start_time = time.time()
+    c22_train, c22_test = data.get_sktime_features_unsupervised(
+        X_train=data.X_train, X_test=data.X_test, transformer=Catch22()
+    )
+    fit_times["c22"] = time.time() - start_time
+    start_time = time.time()
+    summary_train, summary_test = data.get_sktime_features_unsupervised(
+        X_train=data.X_train, X_test=data.X_test, transformer=SummaryTransformer()
+    )
+    fit_times["summary"] = time.time() - start_time
+    start_time = time.time()
+    rfe_train, rfe_test = data.get_sktime_features_unsupervised(
+        X_train=data.X_train,
+        X_test=data.X_test,
+        transformer=RandomIntervalFeatureExtractor(),
+    )
+    fit_times["rfe"] = time.time() - start_time
+    start_time = time.time()
+    rocket_train, rocket_test = data.get_sktime_features_unsupervised(
+        X_train=data.X_train, X_test=data.X_test, transformer=Rocket()
+    )
+    fit_times["rocket"] = time.time() - start_time
 
     def add_row_from_aggregate_report(df, name, method, aggregate_report):
         new_row = pd.DataFrame(
@@ -365,61 +421,84 @@ def get_eval_df(
         )
         return pd.concat([df, new_row])
 
-    combined_train = np.concatenate([c22_train, embeddings_train], axis=1)
-    combined_test = np.concatenate([c22_test, embeddings_test], axis=1)
     feature_pairs = (
         ("proposed", embeddings_train, embeddings_test),
         ("c22", c22_train, c22_test),
+        ("summary", summary_train, summary_test),
+        ("rfe", rfe_train, rfe_test),
+        ("rocket", rocket_train, rocket_test),
         ("raw", data.X_train, data.X_test),
-        ("prop+c22", combined_train, combined_test),
+        # (
+        #     "prop+c22",
+        #     np.concatenate([c22_train, embeddings_train], axis=1),
+        #     np.concatenate([c22_test, embeddings_test], axis=1),
+        # ),
+        (
+            "prop+rocket",
+            np.concatenate([c22_train, rocket_train], axis=1),
+            np.concatenate([c22_test, rocket_test], axis=1),
+        ),
     )
 
-    for method, X_train, X_test in feature_pairs:
-        # -- Add MLP
-        if verbose:
-            print("Computing MLP")
-        report, _, _ = evaluate_resampling_UCR(
-            X_train,
-            X_test,
-            y_train,
-            y_test,
-            n_resamples=n_resamples,
-            classifier=MLPClassifier(alpha=0.001, max_iter=25),
-            over_sampling=over_sampling,
-            scale=scale,
-            verbose=verbose,
-        )
-        df = add_row_from_aggregate_report(df, name, method + " MLP" + suffix, report)
-        # -- Add SVC
-        if verbose:
-            print("Computing SVC")
-        report, _, _ = evaluate_resampling_UCR(
-            X_train,
-            X_test,
-            y_train,
-            y_test,
-            n_resamples=n_resamples,
-            classifier=SVC(kernel="rbf"),
-            over_sampling=over_sampling,
-            scale=scale,
-            verbose=verbose,
-        )
-        df = add_row_from_aggregate_report(df, name, method + " SVC" + suffix, report)
-        # -- Add KNN
-        if verbose:
-            print("Computing KNN")
-        report, _, _ = evaluate_resampling_UCR(
-            X_train,
-            X_test,
-            y_train,
-            y_test,
-            classifier=KNeighborsClassifier(n_neighbors=1, metric="euclidean"),
-            n_resamples=n_resamples,
-            over_sampling=False,
-            scale=scale,
-            verbose=verbose,
-        )
-        df = add_row_from_aggregate_report(df, name, method + " 1NN" + suffix, report)
+    classifiers = (
+        # {
+        #     "clf_name": "MLP",
+        #     "classifier": MLPClassifier(alpha=0.001, max_iter=25),
+        #     "scale": scale,
+        #     "over_sampling": over_sampling,
+        # },
+        {
+            "clf_name": "SVC",
+            "classifier": SVC(kernel="rbf"),
+            "scale": scale,
+            "over_sampling": over_sampling,
+        },
+        {
+            "clf_name": "logistic",
+            "classifier": LogisticRegression(),
+            "scale": scale,
+            "over_sampling": over_sampling,
+        },
+        # {
+        #     "clf_name": "DT",
+        #     "classifier": DecisionTreeClassifier(),
+        #     "scale": scale,
+        #     "over_sampling": over_sampling,
+        # },
+        {
+            "clf_name": "1NN",
+            "classifier": KNeighborsClassifier(n_neighbors=1, metric="euclidean"),
+            "scale": scale,
+            "over_sampling": over_sampling,
+        },
+    )
+    for feature_method, X_train, X_test in feature_pairs:
+        for clf_dict in classifiers:
+            clf_name = clf_dict["clf_name"]
+            if verbose:
+                print(f"Running {clf_name} with {feature_method}")
+            # -- Add MLP
+            if verbose:
+                print("Computing MLP")
+            start_time = time.time()
+            report, _, _ = evaluate_resampling_UCR(
+                X_train,
+                X_test,
+                y_train,
+                y_test,
+                n_resamples=n_resamples,
+                verbose=verbose,
+                **{k: v for k, v in clf_dict.items() if k != "clf_name"},
+            )
+            end_time = time.time()
+            report["classification_time"] = end_time - start_time
+            if feature_method in fit_times:
+                report["feature_time"] = fit_times[feature_method]
+            else:
+                report["feature_time"] = np.nan
+            df = add_row_from_aggregate_report(
+                df, name, feature_method + f" {clf_name}" + suffix, report
+            )
 
     return df.sort_index()
 
@@ -461,3 +540,13 @@ def highlight_max_in_dataset(df, level, cols):
             )
 
     return styles
+
+
+def apply_styling(df):
+    styled_df = df.sort_index().style.apply(
+        highlight_max_in_dataset,
+        level=0,
+        cols=["precision", "recall", "f1-score", "accuracy"],
+        axis=None,
+    )
+    return styled_df
