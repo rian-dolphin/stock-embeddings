@@ -3,6 +3,7 @@
 /Data
 /TrainingData
 .DS_Store
+/embeddings/*
 
 #--------------------
 #--------------------

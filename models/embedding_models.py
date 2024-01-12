@@ -189,20 +189,20 @@ class MatrixFactorization(BaseModel):
 
     def calculate_loss(
         self,
-        similarity_matrix1: torch.Tensor,
-        similarity_matrix2: torch.Tensor,
+        model_similarity_matrix: torch.Tensor,
+        target_similarity_matrix: torch.Tensor,
         loss_function=F.l1_loss,
         noise_mask: bool = False,
     ):
         """Calculate loss between corresponding non-diagonal elements
         of two square matrices using a specified loss function.
 
-        This function assumes that similarity_matrix1 and similarity_matrix2 are square matrices
+        This function assumes that model_similarity_matrix and target_similarity_matrix are square matrices
         of the same size.
 
         Args:
-            similarity_matrix1 (torch.Tensor): A square matrix of shape (n, n).
-            similarity_matrix2 (torch.Tensor): Another square matrix of shape (n, n).
+            model_similarity_matrix (torch.Tensor): A square matrix of shape (n, n).
+            target_similarity_matrix (torch.Tensor): Another square matrix of shape (n, n).
             loss_function (callable): PyTorch loss function to be used for calculation.
             noise_mask (bool): If True then only include extreme similarity values
 
@@ -210,30 +210,37 @@ class MatrixFactorization(BaseModel):
             torch.Tensor: The calculated loss.
         """
         # Check if inputs are numpy arrays
-        if isinstance(similarity_matrix1, np.ndarray) or isinstance(
-            similarity_matrix2, np.ndarray
+        if isinstance(model_similarity_matrix, np.ndarray) or isinstance(
+            target_similarity_matrix, np.ndarray
         ):
             raise TypeError(
-                "similarity_matrix1 and similarity_matrix2 must be torch tensors, not numpy arrays"
+                "model_similarity_matrix and target_similarity_matrix must be torch tensors, not numpy arrays"
             )
 
         # Ensure that the input matrices are square and of the same size
         assert (
-            similarity_matrix1.shape == similarity_matrix2.shape
+            model_similarity_matrix.shape == target_similarity_matrix.shape
         ), "Matrices must be of the same size."
         assert (
-            similarity_matrix1.shape[0] == similarity_matrix1.shape[1]
+            model_similarity_matrix.shape[0] == model_similarity_matrix.shape[1]
         ), "Matrices must be square."
 
+        # Mask diagonals which should be provided as nan
+        mask = ~model_similarity_matrix.isnan() & ~target_similarity_matrix.isnan()
         # Create a mask for non-diagonal elements
-        n = similarity_matrix1.shape[0]
-        mask = torch.eye(n, dtype=torch.bool).logical_not()
+        # n = model_similarity_matrix.shape[0]
+        # mask = torch.eye(n, dtype=torch.bool).logical_not()
 
         # Apply the mask
-        masked_sim_matrix1 = similarity_matrix1[mask]
-        masked_sim_matrix2 = similarity_matrix2[mask]
+        masked_sim_matrix1 = model_similarity_matrix[mask]
+        masked_sim_matrix2 = target_similarity_matrix[mask]
 
         if noise_mask:
+            """
+            TODO: Change to this:
+                similarity_matrix = MatrixFactorization.apply_IQR_mask(similarity_matrix, percentiles=(0.25,0.75))
+            Doesn't need to be applied to both matrices since loss function deals with NaNs
+            """
 
             def get_noise_mask(similarity_matrix: torch.Tensor, lower=None, upper=None):
                 if (lower is None) & (upper is None):
@@ -299,18 +306,22 @@ class MatrixFactorization(BaseModel):
 
         # Function to calculate losses
         def get_all_losses(
-            model: "MatrixFactorization", correlations: torch.Tensor
+            model: "MatrixFactorization", target_similarity_matrix: torch.Tensor
         ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             pairwise_similarity = model()
             pairwise_loss = pairwise_loss_weight * model.calculate_loss(
-                correlations,
-                pairwise_similarity,
+                model_similarity_matrix=pairwise_similarity,
+                target_similarity_matrix=target_similarity_matrix,
                 loss_function=torch.nn.functional.l1_loss,
                 noise_mask=noise_mask,
             )
             regularization_loss = (
                 regularization_loss_weight
-                * torch.abs(torch.linalg.norm(model.embeddings.weight, dim=1) - 1).sum()
+                # * torch.abs(torch.linalg.norm(model.embeddings.weight, dim=1) - 1).sum()
+                * torch.square(
+                    torch.linalg.norm(model.embeddings.weight, dim=1) - 1
+                ).sum()
+                # * torch.linalg.norm(model.embeddings.weight, dim=1).sum()
             )
             total_loss = pairwise_loss + regularization_loss
             return total_loss, pairwise_loss, regularization_loss
@@ -419,3 +430,79 @@ class MatrixFactorization(BaseModel):
             fig.show()
         if return_fig:
             return fig
+
+    @staticmethod
+    def apply_random_mask(similarity_matrix, percentage):
+        if similarity_matrix.shape[0] != similarity_matrix.shape[1]:
+            raise ValueError("similarity_matrix must be square")
+
+        if not (0 <= percentage <= 1):
+            raise ValueError("Percentage must be between 0 and 100")
+
+        # Create a mask to extract non-diagonal elements
+        non_diagonal_mask = ~torch.eye(similarity_matrix.shape[0], dtype=torch.bool)
+
+        # Flatten the non-diagonal elements and select a random sample
+        non_diagonal_indices = non_diagonal_mask.nonzero(as_tuple=True)
+        num_elements_to_mask = int(percentage * non_diagonal_indices[0].shape[0])
+        selected_indices = torch.randperm(non_diagonal_indices[0].shape[0])[
+            :num_elements_to_mask
+        ]
+
+        # Create an initial mask with all False
+        mask = torch.zeros_like(similarity_matrix, dtype=torch.bool)
+
+        # Set selected indices to True using advanced indexing
+        mask[
+            non_diagonal_indices[0][selected_indices],
+            non_diagonal_indices[1][selected_indices],
+        ] = True
+
+        # Apply mask in-place
+        similarity_matrix.masked_fill_(mask, torch.nan)
+
+        return similarity_matrix
+
+    @staticmethod
+    def apply_IQR_mask(similarity_matrix, percentiles=(0.25, 0.75)):
+        """Get mask to keep only upper and lower values per row
+        Args:
+            similarity_matrix (_type_): _description_
+            percentiles (tuple, optional): Percentiles to determine the threshold for low and high values. Defaults to (0.25, 0.75).
+        """
+        if similarity_matrix.shape[0] != similarity_matrix.shape[1]:
+            raise ValueError("similarity_matrix must be square")
+
+        # Mask out diagonal elements (set them to NaN for now)
+        similarity_matrix.fill_diagonal_(torch.nan)
+
+        # Compute the lower and upper quantiles for each row
+        # First filter out the diagonals since they are nan and break the rowwise calculation
+        n = similarity_matrix.shape[0]
+        no_diagonals = (
+            similarity_matrix.flatten()[1:].view(n - 1, n + 1)[:, :-1].reshape(n, n - 1)
+        )
+        lower_quartile = torch.quantile(no_diagonals, percentiles[0], dim=1)
+        upper_quartile = torch.quantile(no_diagonals, percentiles[1], dim=1)
+
+        # Expand the quantiles to match the shape of the similarity_matrix
+        lower_quartile_expanded = lower_quartile.unsqueeze(1).expand_as(
+            similarity_matrix
+        )
+        upper_quartile_expanded = upper_quartile.unsqueeze(1).expand_as(
+            similarity_matrix
+        )
+
+        # Create masks based on the quantiles
+        lower_mask = similarity_matrix < lower_quartile_expanded
+        upper_mask = similarity_matrix > upper_quartile_expanded
+
+        # Apply the masks and set values
+        similarity_matrix[lower_mask] = -2
+        similarity_matrix[upper_mask] = 2
+        similarity_matrix[~(lower_mask | upper_mask)] = torch.nan
+
+        # Restore the diagonal to NaN
+        similarity_matrix.fill_diagonal_(torch.nan)
+
+        return similarity_matrix
