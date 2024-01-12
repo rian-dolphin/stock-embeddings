@@ -4,6 +4,7 @@
 /TrainingData
 .DS_Store
 /embeddings/*
+/UCR_files
 
 #--------------------
 #--------------------
