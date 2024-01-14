@@ -116,3 +116,7 @@ class BaseModel(nn.Module):
         fig.update_traces(marker={"size": 4})
         # fig.update_layout(template='plotly_dark')
         fig.show()
+
+    def normalize_embeddings(self) -> None:
+        norms = self.embeddings.weight.norm(dim=1, keepdim=True)
+        self.embeddings.weight = torch.nn.Parameter(self.embeddings.weight / norms)

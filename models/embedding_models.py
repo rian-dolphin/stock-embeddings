@@ -53,10 +53,6 @@ class MatrixFactorization(BaseModel):
         if normalize:
             self.normalize_embeddings()
 
-    def normalize_embeddings(self) -> None:
-        norms = self.embeddings.weight.norm(dim=1, keepdim=True)
-        self.embeddings.weight = torch.nn.Parameter(self.embeddings.weight / norms)
-
     def forward(self) -> torch.Tensor:
         pairwise_similarities = torch.einsum(
             "nd,md->nm", self.embeddings.weight, self.embeddings.weight
