@@ -284,7 +284,8 @@ def get_tgt_context_euclidean_multiprocess(
     pool.close()
     pool.join()
 
-    print("nearly returning")
+    if verbose:
+        print("nearly returning")
     # return results
 
     return [item for sublist in results for item in sublist]  # flatten the list
