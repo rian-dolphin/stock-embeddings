@@ -118,5 +118,7 @@ class BaseModel(nn.Module):
         fig.show()
 
     def normalize_embeddings(self) -> None:
-        norms = self.embeddings.weight.norm(dim=1, keepdim=True)
-        self.embeddings.weight = torch.nn.Parameter(self.embeddings.weight / norms)
+        # Normalize embeddings without altering computation graph
+        with torch.no_grad():
+            norms = self.embeddings.weight.norm(dim=1, keepdim=True)
+            self.embeddings.weight.data = self.embeddings.weight.data / norms
