@@ -158,6 +158,7 @@ def get_tgt_context_euclidean_chunk(
     k: int,
     stride: int,
     z_normalize: bool = True,
+    st_dev_pruning: bool = False,
     verbose: bool = True,
     top_k: bool = True,
 ) -> List[Tuple[int, List[int]]]:
@@ -181,6 +182,8 @@ def get_tgt_context_euclidean_chunk(
         The step size to move the window across the time series for subsequent k-NN calculations.
     z_normalize : bool, optional
         If True, the function will apply Z-normalization to the data (default is True).
+    st_dev_pruning : bool, optional
+        If True, the function will discard any tgt:context sets where the standard deviation is below the 50th percentile standard deviation for all time series over that subsequence (default is False).
     verbose : bool, optional
         If True, the function will display progress information (default is True).
     top_k : bool, optional
@@ -202,13 +205,22 @@ def get_tgt_context_euclidean_chunk(
     else:
         sign = -1
 
-    if z_normalize:
+    if z_normalize or st_dev_pruning:
         mu_matrix, sigma_matrix = compute_moving_avg_std_matrix(ts_array, m=m)
+
+    if st_dev_pruning:
+        # Get the 50th percentile standard deviation for each time period
+        std_thresholds = np.quantile(sigma_matrix, 0.95, axis=0)
+
     tgt_context_sets = []
     for i in tqdm(i_range, disable=not verbose):
         for t in range(0, ts_array.shape[1] - m + 1, stride):
             query = ts_array[i][t : t + m]
             subsequences = ts_array[:, t : t + m]
+            if st_dev_pruning:
+                if sigma_matrix[:, t][i] < std_thresholds[t]:
+                    # if below threshold then don't add to pairs
+                    continue
             if z_normalize:
                 mean = mu_matrix[:, t].reshape(-1, 1)
                 std = sigma_matrix[:, t].reshape(-1, 1)
@@ -237,6 +249,7 @@ def get_tgt_context_euclidean_multiprocess(
     k: int,
     stride: int = 1,
     z_normalize: bool = True,
+    st_dev_pruning: bool = False,
     verbose: bool = True,
     top_k: bool = True,
 ) -> List[Tuple[int, List[int]]]:
@@ -255,6 +268,8 @@ def get_tgt_context_euclidean_multiprocess(
         The step size for moving through the time series (default is 1).
     z_normalize : bool, optional
         A boolean indicating whether to Z-normalize the data (default is True).
+    st_dev_pruning : bool, optional
+        If True, the function will discard any tgt:context sets where the standard deviation is below the 50th percentile standard deviation for all time series over that subsequence (default is False).
     verbose : bool, optional
         A boolean indicating whether to display progress (default is True).
     top_k : bool, optional
@@ -277,7 +292,17 @@ def get_tgt_context_euclidean_multiprocess(
     results = pool.starmap(
         get_tgt_context_euclidean_chunk,
         [
-            (i_range, ts_array, m, k, stride, z_normalize, verbose, top_k)
+            (
+                i_range,
+                ts_array,
+                m,
+                k,
+                stride,
+                z_normalize,
+                st_dev_pruning,
+                verbose,
+                top_k,
+            )
             for i_range in ranges
         ],
     )
