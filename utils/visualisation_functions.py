@@ -122,7 +122,7 @@ def plot_2d(df):
     )
 
     fig.update_layout(
-        template="plotly_white",
+        template="plotly_dark",
         # paper_bgcolor='rgba(0,0,0,0)',
         # plot_bgcolor='rgba(0,0,0,0)',
         # title='2d Visualisation of Stock Embeddings Colored By Sector'
