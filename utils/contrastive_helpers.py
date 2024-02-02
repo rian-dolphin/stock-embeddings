@@ -99,11 +99,11 @@ class AggregateSigmoidLoss(BaseContrastiveLoss):
         return loss
 
 
-class SigPos_AggSoftmax(BaseContrastiveLoss):
+class IndPos_AggSoftmax(BaseContrastiveLoss):
     """Individual Sigmoid Positive with Aggregate Softmax"""
 
     def __init__(self, positive_weight=1, negative_weight=1):
-        super(SigPos_AggSoftmax, self).__init__()
+        super(IndPos_AggSoftmax, self).__init__()
         self.positive_weight = positive_weight
         self.negative_weight = negative_weight
 
@@ -148,11 +148,11 @@ class SigPos_AggSoftmax(BaseContrastiveLoss):
         return loss
 
 
-class AggPos_SigNeg(BaseContrastiveLoss):
+class AggPos_IndNeg(BaseContrastiveLoss):
     """Aggregate Positive with Individual Sigmoid for negatives"""
 
     def __init__(self, positive_weight=1, negative_weight=1):
-        super(AggPos_SigNeg, self).__init__()
+        super(AggPos_IndNeg, self).__init__()
         self.positive_weight = positive_weight
         self.negative_weight = negative_weight
 
