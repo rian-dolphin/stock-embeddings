@@ -1,5 +1,7 @@
+import time
 from collections import defaultdict
 
+import numpy as np
 import plotly.graph_objects as go
 import torch
 import torch.nn as nn
@@ -35,17 +37,27 @@ class ContrastiveMultiPN(BaseModel):
         learning_rate,
         epochs,
         regularization_weight=0,
+        patience=10,
         normalize=False,
+        early_stopping: bool = False,
+        print_every=1,
     ):
         optimizer = optim.Adam(self.embeddings.parameters(), lr=learning_rate)
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.8, patience=patience, threshold=0.1
+        )
+        lr_latest = optimizer.param_groups[0]["lr"]
+        lr_epoch_changed = [0]
 
         # Create the dataset and data loader
         multi_pos_neg_dataset = MultiPosNegDataset(index_samples)
         data_loader = DataLoader(
             multi_pos_neg_dataset, batch_size=batch_size, shuffle=True
         )
-
+        start_time = time.time()
         for epoch in range(epochs):
+            epoch_start_time = time.time()
             epoch_losses = {"total": 0, "contrastive": 0, "regularization": 0}
             # normalise the embeddings to prevent degenerate solution
             if normalize:
@@ -86,17 +98,46 @@ class ContrastiveMultiPN(BaseModel):
                 optimizer.step()
 
                 # Update epoch loss sums
-                epoch_losses["total"] += batch_loss.item()
-                epoch_losses["contrastive"] += contrastive_loss.item()
-                epoch_losses["regularization"] += regularization_loss.item()
+                epoch_losses["total"] += batch_loss
+                epoch_losses["contrastive"] += contrastive_loss
+                epoch_losses["regularization"] += regularization_loss
 
             # Append epoch sums to losses dictionary
             for loss_type, loss_value in epoch_losses.items():
-                self.losses[loss_type].append(loss_value / len(data_loader))
-            self.losses["learning_rate"].append(optimizer.param_groups[0]["lr"])
+                self.losses[loss_type].append(loss_value.item() / len(data_loader))
 
-            if (epoch % 1 == 0) | (epoch == epochs - 1) | (epoch == 0):
-                print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_losses['total']:.4f}")
+            lr = optimizer.param_groups[0]["lr"]
+            self.losses["learning_rate"].append(lr)
+
+            scheduler.step(epoch_losses["contrastive"])
+
+            # -- If three consecutive patience are hit in lr scheduler then early stop
+            if early_stopping:
+                if lr < lr_latest:
+                    lr_latest = lr
+                    lr_epoch_changed.append(epoch)
+                    if len(lr_epoch_changed) < 4:
+                        pass
+                    elif all(np.diff(lr_epoch_changed)[-3:] == [patience + 1] * 3):
+                        print(f"Early stopping at epoch {epoch}")
+                        break
+
+            # Print updates
+            epoch_end_time = time.time()  # End time of the epoch
+            epoch_duration = epoch_end_time - epoch_start_time
+            total_time_elapsed = epoch_end_time - start_time
+            estimated_time_to_completion = (total_time_elapsed / (epoch + 1)) * (
+                epochs - epoch - 1
+            )
+            if (epoch % print_every == 0) | (epoch == epochs - 1) | (epoch == 0):
+                update_string = (
+                    f"=== Epoch [{epoch+1}/{epochs}] ===\n"
+                    f"Contrastive Loss: {self.losses['contrastive'][-1]:.4f}  |  "
+                    f"Total Loss: {self.losses['total'][-1]:.4f},\n"
+                    f"Elapsed: {epoch_duration:.2f} sec |  "
+                    f"Remaining: {estimated_time_to_completion:.2f} sec,\n"
+                )
+                print(update_string)
 
     def plot_training(self, plot_lr=True):
         # Create a figure
