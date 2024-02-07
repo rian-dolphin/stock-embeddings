@@ -72,7 +72,7 @@ class IndividualSigmoidLoss(BaseContrastiveLoss):
 
 class AggregateSigmoidLoss(BaseContrastiveLoss):
     def __init__(self, positive_weight=1, negative_weight=1):
-        super(IndividualSigmoidLoss, self).__init__()
+        super(AggregateSigmoidLoss, self).__init__()
         self.positive_weight = positive_weight
         self.negative_weight = negative_weight
 
