@@ -134,7 +134,7 @@ class ContrastiveMultiPN(BaseModel):
                     f"=== Epoch [{epoch+1}/{epochs}] ===\n"
                     f"Contrastive Loss: {self.losses['contrastive'][-1]:.4f}  |  "
                     f"Total Loss: {self.losses['total'][-1]:.4f},\n"
-                    f"Elapsed: {epoch_duration:.2f} sec |  "
+                    f"Epoch Time: {epoch_duration:.2f} sec |  "
                     f"Remaining: {estimated_time_to_completion:.2f} sec,\n"
                 )
                 print(update_string)
