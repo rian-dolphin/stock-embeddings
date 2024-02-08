@@ -11,7 +11,7 @@ from sklearn.svm import SVC
 
 
 def get_sector_score(
-    embedding_matrix: np.ndarray,
+    X: np.ndarray,
     sectors: list,
     classifier: SVC = SVC(kernel="rbf", probability=True),
     smote: bool = True,
@@ -23,7 +23,7 @@ def get_sector_score(
     """
     Calculate various scores for the sector classification.
 
-    :param embedding_matrix: Input data for training and testing.
+    :param X: Input data for training and testing. This is the embedding matrix.
     :param sectors: The target sectors.
     :param classifier: A classifier object, defaults to SVC.
     :param smote: Boolean flag to apply SMOTE, defaults to True.
@@ -37,7 +37,6 @@ def get_sector_score(
     accuracy_list_top_k = []
     f1_list, recall_list, precision_list = [], [], []
 
-    X = embedding_matrix
     y = np.array(sectors).reshape(-1, 1)
 
     kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
