@@ -7,6 +7,7 @@ from sklearn.metrics import (
     top_k_accuracy_score,
 )
 from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
 
@@ -19,6 +20,7 @@ def get_sector_score(
     n_splits: int = 5,
     random_state: int = 42,
     k: int = 3,
+    scale: bool = False,
 ) -> None:
     """
     Calculate various scores for the sector classification.
@@ -31,6 +33,7 @@ def get_sector_score(
     :param n_splits: Number of splits for cross-validation.
     :param random_state: Random state for reproducibility.
     :param k: The 'k' in top-k accuracy.
+    :param scale: Boolean flag to scale features based on the training data, defaults to False.
     """
 
     accuracy_list = []
@@ -44,6 +47,11 @@ def get_sector_score(
     for train_index, test_index in kf.split(X, y.flatten()):
         X_train, y_train = X[train_index], y[train_index]
         X_test, y_test = X[test_index], y[test_index]
+
+        if scale:
+            scaler = StandardScaler()
+            X_train = scaler.fit_transform(X_train)
+            X_test = scaler.transform(X_test)
 
         if smote:
             sm = SMOTE()
