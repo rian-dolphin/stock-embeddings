@@ -162,14 +162,15 @@ class ContrastiveMultiPN(BaseModel):
                 name="Contrastive Loss",
             )
         )
-        fig.add_trace(
-            go.Scatter(
-                x=x_vals,
-                y=self.losses["regularization"],
-                mode="lines",
-                name="Regularization Loss",
+        if not all(np.array(self.losses["regularization"]) == 0):
+            fig.add_trace(
+                go.Scatter(
+                    x=x_vals,
+                    y=self.losses["regularization"],
+                    mode="lines",
+                    name="Regularization Loss",
+                )
             )
-        )
 
         if plot_lr:
             # Create a secondary y-axis for the total loss
