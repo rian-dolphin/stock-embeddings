@@ -27,6 +27,8 @@ class ContrastiveMultiPN(BaseModel):
             "total": [],
             "learning_rate": [],
             "contrastive": [],
+            "positive": [],
+            "negative": [],
             "regularization": [],
         }
 
@@ -58,7 +60,7 @@ class ContrastiveMultiPN(BaseModel):
         start_time = time.time()
         for epoch in range(epochs):
             epoch_start_time = time.time()
-            epoch_losses = {"total": 0, "contrastive": 0, "regularization": 0}
+            epoch_losses = {k: 0 for k in self.losses.keys()}
             # normalise the embeddings to prevent degenerate solution
             if normalize:
                 self.embeddings = self.normalize_embeddings(self.embeddings)
@@ -79,7 +81,7 @@ class ContrastiveMultiPN(BaseModel):
                 )  # shape: (batch_size, num_neg_samples, embedding_dim)
 
                 # Compute the loss
-                contrastive_loss = self.criterion(
+                contrastive_loss, positive_loss, negative_loss = self.criterion(
                     anchor_embeddings, positive_embeddings, negative_embeddings
                 )
                 batch_loss += contrastive_loss
@@ -100,10 +102,14 @@ class ContrastiveMultiPN(BaseModel):
                 # Update epoch loss sums
                 epoch_losses["total"] += batch_loss
                 epoch_losses["contrastive"] += contrastive_loss
+                epoch_losses["positive"] += positive_loss
+                epoch_losses["negative"] += negative_loss
                 epoch_losses["regularization"] += regularization_loss
 
             # Append epoch sums to losses dictionary
             for loss_type, loss_value in epoch_losses.items():
+                if loss_type == "learning_rate":
+                    continue
                 self.losses[loss_type].append(loss_value.item() / len(data_loader))
 
             lr = optimizer.param_groups[0]["lr"]
@@ -145,32 +151,18 @@ class ContrastiveMultiPN(BaseModel):
 
         x_vals = [i + 1 for i in range(len(self.losses["total"]))]
 
-        # Add traces for pairwise and regularization losses
-        fig.add_trace(
-            go.Scatter(
-                x=x_vals,
-                y=self.losses["total"],
-                mode="lines",
-                name="Total Loss",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=x_vals,
-                y=self.losses["contrastive"],
-                mode="lines",
-                name="Contrastive Loss",
-            )
-        )
-        if not all(np.array(self.losses["regularization"]) == 0):
-            fig.add_trace(
-                go.Scatter(
-                    x=x_vals,
-                    y=self.losses["regularization"],
-                    mode="lines",
-                    name="Regularization Loss",
+        for loss_name, loss_values in self.losses.items():
+            if loss_name == "learning_rate":
+                continue
+            if not all(np.array(loss_values) == 0):
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_vals,
+                        y=loss_values,
+                        mode="lines",
+                        name=loss_name,
+                    )
                 )
-            )
 
         if plot_lr:
             # Create a secondary y-axis for the total loss

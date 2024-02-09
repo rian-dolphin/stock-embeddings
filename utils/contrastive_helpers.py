@@ -68,16 +68,13 @@ class IndividualSigmoidLoss(BaseContrastiveLoss):
         )
         # positive_loss = - torch.sum(torch.nn.functional.logsigmoid(positive_scores), dim=1)
         # negative_loss = - torch.sum(torch.log(1-torch.sigmoid(negative_scores)), dim=1)
-        positive_loss = self.BCELogitsCriterion(
+        positive_loss = self.positive_weight * self.BCELogitsCriterion(
             positive_scores, torch.ones_like(positive_scores)
         )
-        negative_loss = self.BCELogitsCriterion(
+        negative_loss = self.negative_weight * self.BCELogitsCriterion(
             negative_scores, torch.zeros_like(negative_scores)
         )
-        loss = (
-            self.positive_weight * positive_loss + self.negative_weight * negative_loss
-        )
-        self.positive_negative_ratio = positive_loss / negative_loss
+        loss = positive_loss + negative_loss
 
         return loss
 
@@ -100,17 +97,14 @@ class AggregateSigmoidLoss(BaseContrastiveLoss):
         )
         # positive_loss = - torch.sum(torch.nn.functional.logsigmoid(positive_scores))
         # negative_loss = - torch.sum(torch.log(1-torch.sigmoid(negative_scores)+0.00001))
-        positive_loss = self.BCELogitsCriterion(
+        positive_loss = self.positive_weight * self.BCELogitsCriterion(
             positive_scores, torch.ones_like(positive_scores)
         )
-        negative_loss = self.BCELogitsCriterion(
+        negative_loss = self.negative_weight * self.BCELogitsCriterion(
             negative_scores, torch.zeros_like(negative_scores)
         )
 
-        loss = (
-            self.positive_weight * positive_loss + self.negative_weight * negative_loss
-        )
-        self.positive_negative_ratio = positive_loss / negative_loss
+        loss = positive_loss + negative_loss
 
         return loss
 
@@ -132,7 +126,7 @@ class IndPos_AggSoftmax(BaseContrastiveLoss):
         positive_scores = torch.einsum(
             "bpd,bd->bp", [positive_embeddings, anchor_embeddings]
         )
-        positive_loss = self.BCELogitsCriterion(
+        positive_loss = self.positive_weight * self.BCELogitsCriterion(
             positive_scores, torch.ones_like(positive_scores)
         )
 
@@ -155,13 +149,10 @@ class IndPos_AggSoftmax(BaseContrastiveLoss):
         # zeros indicate the first element of concatenated is the target class, which corresponds to the positive sample
         target = torch.zeros(concatenated.shape[0], dtype=torch.long)
 
-        negative_loss = self.NLLCriterion(
+        negative_loss = self.negative_weight * self.NLLCriterion(
             torch.nn.functional.log_softmax(concatenated, dim=1), target
         )
-        loss = (
-            self.positive_weight * positive_loss + self.negative_weight * negative_loss
-        )
-        self.positive_negative_ratio = positive_loss / negative_loss
+        loss = positive_loss + negative_loss
 
         return loss
 
@@ -183,7 +174,7 @@ class AggPos_IndNeg(BaseContrastiveLoss):
             "bd,bd->b", [torch.mean(positive_embeddings, dim=1), anchor_embeddings]
         )
 
-        positive_loss = self.BCELogitsCriterion(
+        positive_loss = self.positive_weight * self.BCELogitsCriterion(
             positive_scores, torch.ones_like(positive_scores)
         )
 
@@ -191,16 +182,13 @@ class AggPos_IndNeg(BaseContrastiveLoss):
         negative_scores = torch.einsum(
             "bnd,bd->bn", [negative_embeddings, anchor_embeddings]
         )
-        negative_loss = self.BCELogitsCriterion(
+        negative_loss = self.negative_weight * self.BCELogitsCriterion(
             negative_scores, torch.zeros_like(negative_scores)
         )
 
-        loss = (
-            self.positive_weight * positive_loss + self.negative_weight * negative_loss
-        )
-        self.positive_negative_ratio = positive_loss / negative_loss
+        loss = positive_loss + negative_loss
 
-        return loss
+        return loss, positive_loss, negative_loss
 
 
 def get_cooccurrence_counts(
