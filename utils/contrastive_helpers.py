@@ -191,6 +191,45 @@ class AggPos_IndNeg(BaseContrastiveLoss):
         return loss, positive_loss, negative_loss
 
 
+class JointPos_MarginalNeg(BaseContrastiveLoss):
+    def __init__(self, positive_weight=1, negative_weight=1):
+        super(JointPos_MarginalNeg, self).__init__()
+        self.positive_weight = positive_weight
+        self.negative_weight = negative_weight
+        self.BCELogitsCriterion = torch.nn.BCEWithLogitsLoss()
+
+    def forward(
+        self, anchor_embeddings, positive_embeddings, negative_embeddings
+    ) -> torch.Tensor:
+        pos_joint_probs_pre_sigmoid = torch.einsum(
+            "bpd,bd->bp", positive_embeddings, anchor_embeddings
+        )
+        # -- Need to do something here to prevent losses becoming huge
+        # - Product of multiple probs becomes very small
+        # pos_joint_probs_pre_sigmoid = torch.prod(pos_joint_probs_pre_sigmoid, dim=1)
+        pos_joint_probs_pre_sigmoid = torch.mean(pos_joint_probs_pre_sigmoid, dim=1)
+        # pos_joint_probs_pre_sigmoid = torch.min(
+        #     pos_joint_probs_pre_sigmoid, dim=1
+        # ).values
+        neg_marginal_probs_pre_sigmoid = torch.einsum(
+            "bnd,bd->bn", negative_embeddings, anchor_embeddings
+        )
+
+        pos_joint_probs_pre_sigmoid = pos_joint_probs_pre_sigmoid.flatten()
+        neg_marginal_probs_pre_sigmoid = neg_marginal_probs_pre_sigmoid.flatten()
+
+        positive_loss = self.positive_weight * self.BCELogitsCriterion(
+            pos_joint_probs_pre_sigmoid, torch.ones_like(pos_joint_probs_pre_sigmoid)
+        )
+        negative_loss = self.negative_weight * self.BCELogitsCriterion(
+            neg_marginal_probs_pre_sigmoid,
+            torch.zeros_like(neg_marginal_probs_pre_sigmoid),
+        )
+
+        loss = positive_loss + negative_loss
+        return loss, positive_loss, negative_loss
+
+
 def get_cooccurrence_counts(
     tgt_context_sets: list, data: ReturnsData, verbose: bool = True
 ) -> dict:
