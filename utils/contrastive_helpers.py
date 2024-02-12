@@ -30,7 +30,6 @@ class BaseContrastiveLoss(nn.Module):
         super(BaseContrastiveLoss, self).__init__()
         self.positive_weight = positive_weight
         self.negative_weight = negative_weight
-        self.positive_negative_ratio = None
 
     def forward(
         self,
