@@ -31,6 +31,8 @@ class ContrastiveMultiPN(BaseModel):
             "negative": [],
             "regularization": [],
         }
+        self.lr_latest = None
+        self.lr_epoch_changed = [0]
 
     def train(
         self,
@@ -44,13 +46,18 @@ class ContrastiveMultiPN(BaseModel):
         early_stopping: bool = False,
         print_every=1,
     ):
-        optimizer = optim.Adam(self.embeddings.parameters(), lr=learning_rate)
+        if self.lr_latest is None:
+            optimizer = optim.Adam(self.embeddings.parameters(), lr=learning_rate)
+        else:
+            if learning_rate != self.lr_latest:
+                print(f"Resuming training using last learning rate: {self.lr_latest}")
+            optimizer = optim.Adam(self.embeddings.parameters(), lr=self.lr_latest)
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.8, patience=patience, threshold=0.1
         )
-        lr_latest = optimizer.param_groups[0]["lr"]
-        lr_epoch_changed = [0]
+        if self.lr_latest is None:
+            self.lr_latest = optimizer.param_groups[0]["lr"]
 
         # Create the dataset and data loader
         multi_pos_neg_dataset = MultiPosNegDataset(index_samples)
@@ -119,12 +126,12 @@ class ContrastiveMultiPN(BaseModel):
 
             # -- If three consecutive patience are hit in lr scheduler then early stop
             if early_stopping:
-                if lr < lr_latest:
-                    lr_latest = lr
-                    lr_epoch_changed.append(epoch)
-                    if len(lr_epoch_changed) < 4:
+                if lr < self.lr_latest:
+                    self.lr_latest = lr
+                    self.lr_epoch_changed.append(epoch)
+                    if len(self.lr_epoch_changed) < 4:
                         pass
-                    elif all(np.diff(lr_epoch_changed)[-3:] == [patience + 1] * 3):
+                    elif all(np.diff(self.lr_epoch_changed)[-3:] == [patience + 1] * 3):
                         print(f"Early stopping at epoch {epoch}")
                         break
 
