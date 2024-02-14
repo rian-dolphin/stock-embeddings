@@ -154,7 +154,7 @@ class ContrastiveMultiPN(BaseModel):
                 )
                 print(update_string)
 
-    def plot_training(self, plot_lr=True):
+    def plot_training(self, skip=0, plot_lr=True):
         # Create a figure
         fig = go.Figure()
 
@@ -166,8 +166,8 @@ class ContrastiveMultiPN(BaseModel):
             if not all(np.array(loss_values) == 0):
                 fig.add_trace(
                     go.Scatter(
-                        x=x_vals,
-                        y=loss_values,
+                        x=x_vals[skip:],
+                        y=loss_values[skip:],
                         mode="lines",
                         name=loss_name,
                     )
@@ -181,8 +181,8 @@ class ContrastiveMultiPN(BaseModel):
             )
             fig.add_trace(
                 go.Scatter(
-                    x=x_vals,
-                    y=self.losses["learning_rate"],
+                    x=x_vals[skip:],
+                    y=self.losses["learning_rate"][skip:],
                     mode="lines",
                     name="Learning rate",
                     yaxis="y2",
