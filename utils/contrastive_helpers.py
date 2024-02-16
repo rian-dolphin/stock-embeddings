@@ -49,61 +49,6 @@ class BaseContrastiveLoss(nn.Module):
         raise NotImplementedError("This method should be overridden by subclasses.")
 
 
-# class ClassificationBaseline(BaseContrastiveLoss):
-#     def __init__(self, positive_weight=1, negative_weight=1):
-#         super(IndividualSigmoidLoss, self).__init__()
-#         self.positive_weight = positive_weight
-#         self.negative_weight = negative_weight
-#         self.BCELogitsCriterion = torch.nn.BCEWithLogitsLoss()
-
-#     def forward(
-#         self, anchor_embeddings, positive_embeddings, negative_embeddings
-#     ) -> torch.Tensor:
-#         # -- This extracts the relevant rows of the embedding matrix
-#         # - Equivalent to W^T x_i in "word2vec Parameter Learning Explained"
-#         # (batch_size, n_time_series, embed_dim)
-#         context_embeddings = self.embeddings(inputs)
-
-#         # -- Compute the hidden layer by a simple mean
-#         hidden = context_embeddings.mean(axis=1)  # (n_time_series, embed_dim)
-#         # -- Compute dot product of hidden with embeddings
-#         out = torch.einsum("nd,bd->bn", self.embeddings.weight, hidden)
-
-#         # -- Return the log softmax since we use NLLLoss loss function
-#         nn.functional.log_softmax(out, dim=1)  # (batch_size, n_time_series)
-
-#         # Only use one positive example
-
-#         # hidden: (batch_size, embed_dim)
-#         hidden = torch.mean(positive_embeddings, dim=1)
-
-#         positive_scores = torch.einsum(
-#             "bd,bd->b", [torch.mean(positive_embeddings, dim=1), anchor_embeddings]
-#         )
-#         negative_scores
-
-#         positive_scores = torch.einsum(
-#             "bpd,bd->bp", [positive_embeddings, anchor_embeddings]
-#         )
-#         negative_scores = torch.einsum(
-#             "bnd,bd->bn", [negative_embeddings, anchor_embeddings]
-#         )
-#         # positive_loss = - torch.sum(torch.nn.functional.logsigmoid(positive_scores), dim=1)
-#         # negative_loss = - torch.sum(torch.log(1-torch.sigmoid(negative_scores)), dim=1)
-#         positive_loss = self.BCELogitsCriterion(
-#             positive_scores, torch.ones_like(positive_scores)
-#         )
-#         negative_loss = self.BCELogitsCriterion(
-#             negative_scores, torch.zeros_like(negative_scores)
-#         )
-#         loss = (
-#             self.positive_weight * positive_loss + self.negative_weight * negative_loss
-#         )
-#         self.positive_negative_ratio = positive_loss / negative_loss
-
-#         return loss
-
-
 class IndividualSigmoidLoss(BaseContrastiveLoss):
     def __init__(self, positive_weight=1, negative_weight=1):
         super(IndividualSigmoidLoss, self).__init__()
