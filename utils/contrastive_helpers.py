@@ -281,7 +281,7 @@ def get_cooccurrence_counts(
 def test_ticker_cooccurrence_significance(
     t1: str,
     t2: str,
-    distributions: dict,
+    distributions_df: dict,
     test_direction: Literal[
         "positive_samples", "negative_samples"
     ] = "positive_samples",
@@ -300,7 +300,7 @@ def test_ticker_cooccurrence_significance(
     Parameters:
     - t1 (str): The first stock ticker symbol.
     - t2 (str): The second stock ticker symbol, cooccurrence with t1 is tested.
-    - distributions (dict): A dictionary containing the cooccurrence distributions of stock tickers.
+    - distributions_df (pd.DataFrame): A dataframe containing the cooccurrence distributions of stock tickers.
     - test_direction (Literal["positive_samples", "negative_samples"], optional): Specifies the direction of the test;
       'positive_samples' for testing higher than expected cooccurrences, 'negative_samples' for lower.
       Defaults to 'positive_samples'.
@@ -320,18 +320,16 @@ def test_ticker_cooccurrence_significance(
 
     Example usage: test_ticker_cooccurrence_significance("JPM", "C", positive_sample_distributions, verbose=True, test_direction="positive_samples")
     """
-    # Convert to DataFrame
-    df = pd.DataFrame(distributions).fillna(0)
 
     # Calculate total counts
-    total_counts = df.sum().sum()
+    total_counts = distributions_df.sum().sum()
 
     # Observed count for stock ticker 1 cooccurring with stock ticker 2
-    observed_count = df.loc[t2, t1]
+    observed_count = distributions_df.loc[t2, t1]
 
     # Expected count under equal frequency assumption
     # (1/num_TS)*int((X.shape[1]-period)/stride) * num_pos_samples
-    expected_count = df[t1].sum() / len(df)
+    expected_count = distributions_df[t1].sum() / len(distributions_df)
 
     # Perform a test
     test_statistic = (observed_count - expected_count) / np.sqrt(
@@ -388,13 +386,16 @@ def get_pairwise_p_values(
     for further analysis in financial studies, such as network analysis or identifying potentially correlated assets.
     """
     tuples = []
+    positive_sample_distributions_df = pd.DataFrame(
+        positive_sample_distributions
+    ).fillna(0)
 
-    for ticker in tqdm(data.tickers):
+    for ticker in tqdm(positive_sample_distributions.keys()):
         for t, c in positive_sample_distributions[ticker].items():
             p_value_positive = test_ticker_cooccurrence_significance(
                 ticker,
                 t,
-                positive_sample_distributions,
+                positive_sample_distributions_df,
                 test_direction="positive_samples",
             )
 
