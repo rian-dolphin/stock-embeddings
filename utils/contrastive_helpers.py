@@ -22,7 +22,11 @@ class MultiPosNegDataset(Dataset):
         anchor_idx, positive_indices, negative_indices = self.index_samples[idx]
         positive_indices_tensor = torch.tensor(positive_indices)
         negative_indices_tensor = torch.tensor(negative_indices)
-        return anchor_idx, positive_indices_tensor, negative_indices_tensor
+        return (
+            int(anchor_idx),
+            positive_indices_tensor.int(),
+            negative_indices_tensor.int(),
+        )
 
 
 class BaseContrastiveLoss(nn.Module):
