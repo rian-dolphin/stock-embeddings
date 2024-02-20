@@ -13,20 +13,15 @@ from utils.returns_data_class import ReturnsData
 
 class MultiPosNegDataset(Dataset):
     def __init__(self, index_samples):
-        self.index_samples = index_samples
+        self.anchors = torch.tensor([xi[0] for xi in index_samples]).int()
+        self.positive_sets = torch.tensor([xi[1] for xi in index_samples]).int()
+        self.negative_sets = torch.tensor([xi[2] for xi in index_samples]).int()
 
     def __len__(self):
-        return len(self.index_samples)
+        return len(self.anchors)
 
     def __getitem__(self, idx):
-        anchor_idx, positive_indices, negative_indices = self.index_samples[idx]
-        positive_indices_tensor = torch.tensor(positive_indices)
-        negative_indices_tensor = torch.tensor(negative_indices)
-        return (
-            int(anchor_idx),
-            positive_indices_tensor.int(),
-            negative_indices_tensor.int(),
-        )
+        return self.anchors[idx], self.positive_sets[idx], self.negative_sets[idx]
 
 
 class BaseContrastiveLoss(nn.Module):
