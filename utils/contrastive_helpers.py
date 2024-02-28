@@ -287,9 +287,9 @@ def test_ticker_cooccurrence_significance(
     Tests the significance of the cooccurrence of two stock tickers within given distributions,
     returning either the p-value or a boolean indicating significance based on a specified alpha level.
 
-    This function calculates the observed cooccurrence count of two specified stock tickers and compares it
-    against an expected count under the assumption of equal frequency distribution. A statistical test (Z-test)
-    is then performed to determine the significance of the observed cooccurrence, taking into account the specified
+    This function calculates the observed proportion of cooccurrences for two specified stock tickers and compares it
+    against an expected proportion under the assumption of equal frequency distribution. A statistical test (Z-test)
+    is then performed to determine the significance of the observed proportion, taking into account the specified
     direction of interest (positive or negative samples).
 
     Parameters:
@@ -302,7 +302,7 @@ def test_ticker_cooccurrence_significance(
     - alpha (float | None, optional): The significance level for determining whether the observed cooccurrence is
       statistically significant. If None, the function returns the p-value. Otherwise, it returns a boolean indicating
       whether the p-value is less than alpha. Defaults to None.
-    - verbose (bool, optional): If True, prints detailed test results including observed count, expected count,
+    - verbose (bool, optional): If True, prints detailed test results including observed proportion, expected proportion,
       test statistic, and p-value. Defaults to False.
 
     Returns:
@@ -311,25 +311,20 @@ def test_ticker_cooccurrence_significance(
       specified alpha level.
 
     The function is useful for analyzing relationships between stock tickers in financial data, helping to identify
-    pairs of tickers that cooccur more or less frequently than would be expected by chance alone.
+    pairs of tickers that cooccur more or less frequently than would be expected by chance alone based on their proportions.
 
     Example usage: test_ticker_cooccurrence_significance("JPM", "C", positive_sample_distributions, verbose=True, test_direction="positive_samples")
     """
 
-    # Calculate total counts
-    total_counts = distributions_df.sum().sum()
-
-    # Observed count for stock ticker 1 cooccurring with stock ticker 2
     observed_count = distributions_df.loc[t2, t1]
-
-    # Expected count under equal frequency assumption
-    # (1/num_TS)*int((X.shape[1]-period)/stride) * num_pos_samples
-    expected_count = distributions_df[t1].sum() / len(distributions_df)
-
-    # Perform a test
-    test_statistic = (observed_count - expected_count) / np.sqrt(
-        expected_count * (1 - expected_count / total_counts)
+    t1_samples_total = distributions_df[t1].sum()
+    expected_proportion = 1 / len(distributions_df)
+    observed_proportion = observed_count / t1_samples_total
+    # Test statistic - see https://online.stat.psu.edu/statprogram/reviews/statistical-concepts/proportions
+    test_statistic = (observed_proportion - expected_proportion) / (
+        np.sqrt(expected_proportion * (1 - expected_proportion) / t1_samples_total)
     )
+
     # p_value = norm.sf(abs(z_score))  # two-tailed test
     if test_direction == "positive_samples":
         p_value = norm.sf(test_statistic)  # one-tailed test
@@ -337,8 +332,8 @@ def test_ticker_cooccurrence_significance(
         p_value = norm.cdf(test_statistic)
 
     if verbose:
-        print(f"Observed Count: {observed_count}")
-        print(f"Expected Count: {expected_count}")
+        print(f"Observed Count: {observed_proportion}")
+        print(f"Expected Count: {expected_proportion}")
         print(f"Test Statistic: {test_statistic}")
         print(f"P-value: {p_value}")
     if alpha is None:
