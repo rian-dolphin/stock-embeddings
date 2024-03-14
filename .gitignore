@@ -5,6 +5,7 @@
 .DS_Store
 /embeddings/*
 /UCR_files
+*.csv
 
 #--------------------
 #--------------------
