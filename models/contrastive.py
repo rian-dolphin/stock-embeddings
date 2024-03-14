@@ -45,6 +45,7 @@ class ContrastiveMultiPN(BaseModel):
         normalize=False,
         early_stopping: bool = False,
         print_every=1,
+        update_loss_weights=False,
     ):
         if self.lr_latest is None:
             optimizer = optim.Adam(self.embeddings.parameters(), lr=learning_rate)
@@ -93,10 +94,16 @@ class ContrastiveMultiPN(BaseModel):
                 )
                 batch_loss += contrastive_loss
                 if regularization_weight > 0:
+                    norms = self.embeddings.weight.norm(dim=1)
+                    # Deviation from 1
                     regularization_loss = (
-                        regularization_weight
-                        * torch.square(self.embeddings.weight.norm(dim=1) - 1).sum()
+                        regularization_weight * torch.square(norms - 1).sum()
                     )
+                    # Greater than 2
+                    # regularization_loss = regularization_weight * torch.square(
+                    #     torch.where(norms > 2, norms - 2, 0).sum()
+                    # )
+
                     batch_loss += regularization_loss
                 else:
                     regularization_loss = torch.zeros(1)
@@ -149,10 +156,20 @@ class ContrastiveMultiPN(BaseModel):
                     f"Total Loss: {self.losses['total'][-1]:.4f},\n"
                     f"Positive Loss: {self.losses['positive'][-1]:.4f}  |  "
                     f"Negative Loss: {self.losses['negative'][-1]:.4f},\n"
+                    f"Positive Weight: {self.criterion.positive_weight:.4f}  |  "
+                    f"Negative Weight: {self.criterion.negative_weight:.4f},\n"
                     f"Epoch Time: {epoch_duration:.2f} sec |  "
                     f"Remaining: {estimated_time_to_completion:.2f} sec,\n"
                 )
                 print(update_string)
+
+            if update_loss_weights:
+                self.criterion.update_loss_weights(
+                    positive_loss=self.losses["positive"][-1],
+                    negative_loss=self.losses["negative"][-1],
+                    target_ratio=1,
+                    target_magnitude=5,
+                )
 
     def plot_training(self, skip=0, plot_lr=True):
         # Create a figure

@@ -47,6 +47,26 @@ class BaseContrastiveLoss(nn.Module):
         """
         raise NotImplementedError("This method should be overridden by subclasses.")
 
+    def update_loss_weights(
+        self, positive_loss, negative_loss, target_ratio=1, target_magnitude=5
+    ):
+        """Overwrites the weights to make the positive and negative loss have the same magnitude
+
+        Args:
+            positive_loss: positive loss value for epoch
+            negative_loss: positive loss value for epoch
+            target_ratio (int, optional): . Defaults to 1.
+            target_magnitude (int, optional): Desired pos+neg loss magnitude. Defaults to 5.
+        """
+        if target_ratio != 1:
+            raise NotImplementedError("target ratio not implemented, will always be 1")
+        loss_ratio = positive_loss / negative_loss
+        magnitude_factor = target_magnitude / (2 * negative_loss)
+        self.positive_weight = (
+            self.positive_weight * (1 / loss_ratio) * magnitude_factor
+        )
+        self.negative_weight = self.negative_weight * magnitude_factor
+
 
 class IndividualSigmoidLoss(BaseContrastiveLoss):
     def __init__(self, positive_weight=1, negative_weight=1):
