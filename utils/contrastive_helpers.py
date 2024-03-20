@@ -472,6 +472,9 @@ def get_sampling_distribution(
         filtered_df = filtered_df[
             1 - filtered_df["p_value"] < negative_threshold
         ].copy()
+        # -- Make it so that lower counts will have high pos_prob
+        filtered_df["count"] = filtered_df["count"].max() - filtered_df["count"]
+        filtered_df["count"] = filtered_df["count"] + 1
     else:
         raise ValueError("Invalid sample_type")
     filtered_df["pos_prob"] = filtered_df["count"] / filtered_df["count"].sum()
