@@ -474,7 +474,6 @@ def get_sampling_distribution(
         ].copy()
         # -- Make it so that lower counts will have high pos_prob
         filtered_df["count"] = filtered_df["count"].max() - filtered_df["count"]
-        filtered_df["count"] = filtered_df["count"] + 1
     else:
         raise ValueError("Invalid sample_type")
     filtered_df["pos_prob"] = filtered_df["count"] / filtered_df["count"].sum()
