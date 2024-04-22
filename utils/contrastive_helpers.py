@@ -209,6 +209,35 @@ class AggPos_IndNeg(BaseContrastiveLoss):
         return loss, positive_loss, negative_loss
 
 
+class IndPos_AggNeg(BaseContrastiveLoss):
+    def __init__(self, positive_weight=1, negative_weight=1):
+        super(IndPos_AggNeg, self).__init__()
+        self.positive_weight = positive_weight
+        self.negative_weight = negative_weight
+        self.BCELogitsCriterion = torch.nn.BCEWithLogitsLoss()
+
+    def forward(
+        self, anchor_embeddings, positive_embeddings, negative_embeddings
+    ) -> torch.Tensor:
+        positive_scores = torch.einsum(
+            "bpd,bd->bp", [positive_embeddings, anchor_embeddings]
+        )
+        negative_scores = torch.einsum(
+            "bd,bd->b", [torch.mean(negative_embeddings, dim=1), anchor_embeddings]
+        )
+
+        positive_loss = self.positive_weight * self.BCELogitsCriterion(
+            positive_scores, torch.ones_like(positive_scores)
+        )
+        negative_loss = self.negative_weight * self.BCELogitsCriterion(
+            negative_scores, torch.zeros_like(negative_scores)
+        )
+
+        loss = positive_loss + negative_loss
+
+        return loss, positive_loss, negative_loss
+
+
 class JointPos_MarginalNeg(BaseContrastiveLoss):
     def __init__(self, positive_weight=1, negative_weight=1):
         super(JointPos_MarginalNeg, self).__init__()
