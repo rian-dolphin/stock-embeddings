@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 from models.base_model import BaseModel
 from utils.contrastive_helpers import BaseContrastiveLoss, MultiPosNegDataset
+from utils.sector_classification import get_sector_score
 
 
 class ContrastiveMultiPN(BaseModel):
@@ -46,6 +47,7 @@ class ContrastiveMultiPN(BaseModel):
         early_stopping: bool = False,
         print_every=1,
         update_loss_weights=False,
+        eval_sectors: list | bool = False,
     ):
         if self.lr_latest is None:
             optimizer = optim.Adam(self.embeddings.parameters(), lr=learning_rate)
@@ -99,10 +101,6 @@ class ContrastiveMultiPN(BaseModel):
                     regularization_loss = (
                         regularization_weight * torch.square(norms - 1).sum()
                     )
-                    # Greater than 2
-                    # regularization_loss = regularization_weight * torch.square(
-                    #     torch.where(norms > 2, norms - 2, 0).sum()
-                    # )
 
                     batch_loss += regularization_loss
                 else:
@@ -162,6 +160,13 @@ class ContrastiveMultiPN(BaseModel):
                     f"Remaining: {estimated_time_to_completion:.2f} sec,\n"
                 )
                 print(update_string)
+                get_sector_score(
+                    self.embeddings.weight.detach().numpy(),
+                    sectors=eval_sectors,
+                    top_k_accuracy=True,
+                    scale=True,
+                    smote=True,
+                )
 
             if update_loss_weights:
                 self.criterion.update_loss_weights(
