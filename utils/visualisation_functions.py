@@ -122,12 +122,19 @@ def plot_2d(df):
     )
 
     fig.update_layout(
-        template="plotly_dark",
+        template="presentation",
+        height=400,
+        width=800,
+        margin=dict(t=20),
+        xaxis=dict(zeroline=False),
+        yaxis=dict(zeroline=False),
         # paper_bgcolor='rgba(0,0,0,0)',
         # plot_bgcolor='rgba(0,0,0,0)',
         # title='2d Visualisation of Stock Embeddings Colored By Sector'
     )
     fig.update_layout(height=550, width=650)
+    fig.write_image("/Users/rian/Downloads/2d_clustering.pdf")
+    fig.write_image("/Users/rian/Downloads/2d_clustering.pdf")
     fig.show()
 
 
