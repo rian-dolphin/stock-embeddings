@@ -28,7 +28,6 @@ from tqdm import tqdm
 
 
 class UCR_Data:
-    NUM_FROM_CLASS = 5
     PLOTLY_COLORS = px.colors.qualitative.Plotly + px.colors.qualitative.D3
     PLOTLY_TEMPLATE = "plotly_dark"
     DATA_LOAD_TYPE = "numpy2d"
@@ -70,11 +69,11 @@ class UCR_Data:
         self.n_classes = len(np.unique(self.y))
         self.length = self.X.shape[1]
 
-    def plot_fig(self, diff: bool = False) -> go.Figure:
+    def plot_fig(self, diff: bool = False, num_from_class=5) -> go.Figure:
         classes = self._get_classes()
         fig = go.Figure()
         for c, idxs in classes.items():
-            idxs_subset = np.random.choice(idxs, self.NUM_FROM_CLASS)
+            idxs_subset = np.random.choice(idxs, num_from_class)
             for i in idxs_subset:
                 self._add_trace_to_fig(fig, c, i, diff)
         fig.update_layout(
