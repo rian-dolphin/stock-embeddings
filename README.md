@@ -1,11 +1,11 @@
 # Learning Embedding Representations for Stocks from Returns Time Series
 
-The code relating to the paper - *Stock Embeddings: Learning Distributed Representations for Financial Assets* [pdf](https://arxiv.org/pdf/2202.08968.pdf) can be found in the [pointwise_embeddings.ipynb](https://github.com/rian-dolphin/stock-embeddings/blob/main/pointwise_embeddings.ipynb) notebook.
+The code relating to the paper - *Stock Embeddings: Learning Distributed Representations for Financial Assets* [[pdf](https://arxiv.org/pdf/2202.08968.pdf)] can be found in the [pointwise_embeddings.ipynb](https://github.com/rian-dolphin/stock-embeddings/blob/main/pointwise_embeddings.ipynb) notebook.
 
 Some more recent work that may be of interest:
-- Improved results using contrastive learning for asset embeddings [pdf](https://arxiv.org/pdf/2407.18645)
+- Improved results using contrastive learning for asset embeddings [[pdf](https://arxiv.org/pdf/2407.18645)]
   - [Accepted](https://dl.acm.org/doi/10.1145/3677052.3698610) at ICAIF 2024
-- Leveraging financial news for multimodal asset embeddings [pdf](https://arxiv.org/pdf/2211.06378)
+- Leveraging financial news for multimodal asset embeddings [[pdf](https://arxiv.org/pdf/2211.06378)]
 
 Cite as:
 ```
