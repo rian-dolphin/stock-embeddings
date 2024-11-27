@@ -19,3 +19,4 @@ Cite as:
 ```
 
 Data files are too large to be stored in the repo but feel free to reach out to me via email: dolphrian@gmail.com
+The first 10 rows of each data file can be found in the sample files in the `Data/` directory to show the required format.
