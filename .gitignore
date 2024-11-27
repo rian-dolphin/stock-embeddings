@@ -1,6 +1,7 @@
 
 
-/Data
+/Data/*
+!/Data/sample_*
 /TrainingData
 .DS_Store
 
