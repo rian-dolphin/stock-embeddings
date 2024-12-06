@@ -117,41 +117,44 @@ class UCR_Data:
     def __str__(self) -> str:
         return f"UCR Data: {self.length} length, {self.n_classes} classes"
 
-    @classmethod
+    @staticmethod
     def get_sktime_features_unsupervised(
-        cls, X_train: np.ndarray, X_test: np.ndarray, transformer=Catch22(), clean=True
+        X_train: np.ndarray, X_test: np.ndarray, transformer=Catch22(), clean=True
     ):
-        transformer.fit(cls.sktime_from_numpy(X_train))
+        transformer.fit(UCR_Data.sktime_from_numpy(X_train))
         X_train_transformed = transformer.transform(
-            cls.sktime_from_numpy(X_train)
+            UCR_Data.sktime_from_numpy(X_train)
         ).values
-        X_test_transformed = transformer.transform(cls.sktime_from_numpy(X_test)).values
+        X_test_transformed = transformer.transform(
+            UCR_Data.sktime_from_numpy(X_test)
+        ).values
 
         # -- Handle if returned as sktime nested dataframe
         if X_train_transformed.shape[1] == 1:
             X_train_transformed = from_nested_to_2d_array(X_train_transformed).values
             X_test_transformed = from_nested_to_2d_array(X_test_transformed).values
         if clean:
-            X_train_trans_cleaned, X_test_trans_cleaned = cls.clean_features(
+            X_train_trans_cleaned, X_test_trans_cleaned = UCR_Data.clean_features(
                 X_train_transformed, X_test_transformed
             )
             return X_train_trans_cleaned, X_test_trans_cleaned
         return X_train_transformed, X_test_transformed
 
-    @classmethod
+    @staticmethod
     def get_sktime_features_supervised(
-        cls,
         X_train: np.ndarray,
         X_test: np.ndarray,
         y_train: np.ndarray,
         transformer,
         clean=True,
     ):
-        transformer.fit(cls.sktime_from_numpy(X_train), y_train)
+        transformer.fit(UCR_Data.sktime_from_numpy(X_train), y_train)
         X_train_transformed = transformer.transform(
-            cls.sktime_from_numpy(X_train)
+            UCR_Data.sktime_from_numpy(X_train)
         ).values
-        X_test_transformed = transformer.transform(cls.sktime_from_numpy(X_test)).values
+        X_test_transformed = transformer.transform(
+            UCR_Data.sktime_from_numpy(X_test)
+        ).values
 
         # -- Handle if returned as sktime nested dataframe
         if X_train_transformed.shape[1] == 1:
@@ -159,7 +162,7 @@ class UCR_Data:
             X_test_transformed = from_nested_to_2d_array(X_test_transformed).values
 
         if clean:
-            X_train_trans_cleaned, X_test_trans_cleaned = cls.clean_features(
+            X_train_trans_cleaned, X_test_trans_cleaned = UCR_Data.clean_features(
                 X_train_transformed, X_test_transformed
             )
             return X_train_trans_cleaned, X_test_trans_cleaned
