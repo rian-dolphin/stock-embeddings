@@ -119,8 +119,35 @@ class UCR_Data:
 
     @staticmethod
     def get_sktime_features_unsupervised(
-        X_train: np.ndarray, X_test: np.ndarray, transformer=Catch22(), clean=True
+        X_train: np.ndarray,
+        X_test: np.ndarray,
+        transformer=Catch22(),
+        clean=True,
+        normalise=False,
     ):
+        """
+        Extract features from time series data using sktime transformers.
+
+        Parameters:
+        -----------
+        X_train : np.ndarray
+            Training data
+        X_test : np.ndarray
+            Test data
+        transformer : sktime transformer object, default=Catch22()
+            The transformer to extract features
+        clean : bool, default=True
+            Whether to clean features by removing constant and NaN columns
+        normalize : bool, default=False
+            Whether to normalize features using StandardScaler
+
+        Returns:
+        --------
+        tuple
+            Transformed (and optionally cleaned and normalized) training and test data
+        """
+        from sklearn.preprocessing import StandardScaler
+
         transformer.fit(UCR_Data.sktime_from_numpy(X_train))
         X_train_transformed = transformer.transform(
             UCR_Data.sktime_from_numpy(X_train)
@@ -129,15 +156,21 @@ class UCR_Data:
             UCR_Data.sktime_from_numpy(X_test)
         ).values
 
-        # -- Handle if returned as sktime nested dataframe
+        # Handle if returned as sktime nested dataframe
         if X_train_transformed.shape[1] == 1:
             X_train_transformed = from_nested_to_2d_array(X_train_transformed).values
             X_test_transformed = from_nested_to_2d_array(X_test_transformed).values
+
         if clean:
-            X_train_trans_cleaned, X_test_trans_cleaned = UCR_Data.clean_features(
+            X_train_transformed, X_test_transformed = UCR_Data.clean_features(
                 X_train_transformed, X_test_transformed
             )
-            return X_train_trans_cleaned, X_test_trans_cleaned
+
+        if normalise:
+            scaler = StandardScaler()
+            X_train_transformed = scaler.fit_transform(X_train_transformed)
+            X_test_transformed = scaler.transform(X_test_transformed)
+
         return X_train_transformed, X_test_transformed
 
     @staticmethod
@@ -147,7 +180,33 @@ class UCR_Data:
         y_train: np.ndarray,
         transformer,
         clean=True,
+        normalise=False,
     ):
+        """
+        Extract features from time series data using supervised sktime transformers.
+
+        Parameters:
+        -----------
+        X_train : np.ndarray
+            Training data
+        X_test : np.ndarray
+            Test data
+        y_train : np.ndarray
+            Training labels for supervised feature extraction
+        transformer : sktime transformer object
+            The supervised transformer to extract features
+        clean : bool, default=True
+            Whether to clean features by removing constant and NaN columns
+        normalize : bool, default=False
+            Whether to normalize features using StandardScaler
+
+        Returns:
+        --------
+        tuple
+            Transformed (and optionally cleaned and normalized) training and test data
+        """
+        from sklearn.preprocessing import StandardScaler
+
         transformer.fit(UCR_Data.sktime_from_numpy(X_train), y_train)
         X_train_transformed = transformer.transform(
             UCR_Data.sktime_from_numpy(X_train)
@@ -156,16 +215,20 @@ class UCR_Data:
             UCR_Data.sktime_from_numpy(X_test)
         ).values
 
-        # -- Handle if returned as sktime nested dataframe
+        # Handle if returned as sktime nested dataframe
         if X_train_transformed.shape[1] == 1:
             X_train_transformed = from_nested_to_2d_array(X_train_transformed).values
             X_test_transformed = from_nested_to_2d_array(X_test_transformed).values
 
         if clean:
-            X_train_trans_cleaned, X_test_trans_cleaned = UCR_Data.clean_features(
+            X_train_transformed, X_test_transformed = UCR_Data.clean_features(
                 X_train_transformed, X_test_transformed
             )
-            return X_train_trans_cleaned, X_test_trans_cleaned
+
+        if normalise:
+            scaler = StandardScaler()
+            X_train_transformed = scaler.fit_transform(X_train_transformed)
+            X_test_transformed = scaler.transform(X_test_transformed)
 
         return X_train_transformed, X_test_transformed
 
