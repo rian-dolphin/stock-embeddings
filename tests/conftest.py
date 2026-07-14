@@ -6,8 +6,10 @@ against observable behavior / independent reference computations so the same
 assertions can be re-run against ``src/stock_embeddings`` after the restructure.
 """
 
+from datetime import date, timedelta
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 
 
@@ -21,13 +23,16 @@ def make_returns_dataset(tmp_path):
     """
 
     def _make(n_days=10, seed=0, include_misc=True, column_order=None):
-        dates = pd.date_range("2020-01-01", periods=n_days, freq="D")
+        dates = [date(2020, 1, 1) + timedelta(days=i) for i in range(n_days)]
         tickers = column_order or ["AAA", "BBB", "CCC", "DDD"]
         rng = np.random.default_rng(seed)
         # Small returns, no NaNs (keeps pct_change/cumprod math clean).
         data = rng.normal(0.0, 0.01, size=(n_days, len(tickers)))
-        returns_df = pd.DataFrame(data, index=dates, columns=tickers)
-        returns_df.index.name = ""  # matches the real returns_df_611.csv layout
+        # First column has an empty header to match the real returns_df_611.csv
+        # layout (date index written with a blank index name).
+        returns_df = pl.DataFrame(
+            {"": dates, **{t: data[:, j] for j, t in enumerate(tickers)}}
+        )
 
         extras_rows = [
             ("AAA", "NYSE", "Alpha Corp", "TECHNOLOGY", "SOFTWARE"),
@@ -42,14 +47,16 @@ def make_returns_dataset(tmp_path):
         else:
             extras_rows.append(("DDD", "NYSE", "Delta Corp", "ENERGY", "OIL"))
 
-        extras_df = pd.DataFrame(
-            extras_rows, columns=["ticker", "exchange", "name", "sector", "industry"]
+        extras_df = pl.DataFrame(
+            extras_rows,
+            schema=["ticker", "exchange", "name", "sector", "industry"],
+            orient="row",
         )
 
         returns_path = tmp_path / "returns.csv"
         extras_path = tmp_path / "extras.csv"
-        returns_df.to_csv(returns_path)
-        extras_df.to_csv(extras_path, index=False)
+        returns_df.write_csv(returns_path)
+        extras_df.write_csv(extras_path)
 
         return str(returns_path), str(extras_path), returns_df, extras_df
 

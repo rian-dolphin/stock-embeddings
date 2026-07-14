@@ -1,7 +1,7 @@
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Union
 
 import numpy as np
-from pandas import DataFrame
+import polars as pl
 from tqdm import tqdm
 
 # ------------------------------------------
@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 def get_pointwise_tgt_context_sets(
-    df: DataFrame,
+    df: Union[pl.DataFrame, np.ndarray],
     context_size: int = 4,
     verbose: bool = False,
     iqr_noise_reduction: bool = True,
@@ -19,7 +19,10 @@ def get_pointwise_tgt_context_sets(
     Generate index combinations for contextual similarity analysis.
 
     Args:
-        df (DataFrame): DataFrame for similarity analysis.
+        df (pl.DataFrame | np.ndarray): Numeric returns for similarity analysis.
+            A polars DataFrame is converted with ``.to_numpy()``; it must contain
+            only ticker (numeric) columns. Select the ticker columns first if the
+            frame still carries a non-numeric ``date`` column.
         context_size (int): Number of indices to consider as context. Must be even.
         verbose (bool): Flag to enable verbose output.
 
@@ -27,12 +30,27 @@ def get_pointwise_tgt_context_sets(
         List[Tuple[int, List[int]]]: Each tuple contains a target index and a list of context indices.
 
     Raises:
-        ValueError: If context_size is not an even number.
+        ValueError: If context_size is not an even number, or if a polars
+            DataFrame with non-numeric columns is passed.
     """
     if context_size % 2 != 0:
         raise ValueError(f"Context size must be an even number, got {context_size}")
 
-    sorted_indices = np.argsort(df.values).astype(float)
+    if isinstance(df, pl.DataFrame):
+        non_numeric = [
+            c for c, dt in zip(df.columns, df.dtypes) if not dt.is_numeric()
+        ]
+        if non_numeric:
+            raise ValueError(
+                "get_pointwise_tgt_context_sets expects only numeric ticker "
+                f"columns, but found non-numeric column(s) {non_numeric}. Select "
+                "the ticker columns first, e.g. df.select(data.tickers)."
+            )
+        values = df.to_numpy()
+    else:
+        values = np.asarray(df)
+
+    sorted_indices = np.argsort(values).astype(float)
     expanded_indices = _expand_indices(sorted_indices, context_size)
 
     return _generate_combinations(

@@ -1,8 +1,8 @@
 """Characterization tests for utils/pointwise_context.py."""
 
 import numpy as np
+import polars as pl
 import pytest
-from pandas import DataFrame
 
 from stock_embeddings.context.pointwise import get_pointwise_tgt_context_sets
 
@@ -13,7 +13,7 @@ def _plain(combos):
 
 
 def test_odd_context_size_raises():
-    df = DataFrame([[1, 2, 3, 4, 5]])
+    df = pl.DataFrame([[1, 2, 3, 4, 5]], orient="row")
     with pytest.raises(ValueError, match="even number"):
         get_pointwise_tgt_context_sets(df, context_size=3)
 
@@ -26,7 +26,7 @@ def test_exact_single_row_context_size_2_iqr_false():
     # middle_index=1, start=1, end=6. iqr disabled -> process i in 1..5, window i-1:i+2:
     #   i=1 [4,0,2] -> (0,[4,2]);  i=2 [0,2,4] -> (2,[0,4]);  i=3 [2,4,1] -> (4,[2,1])
     #   i=4 [4,1,3] -> (1,[4,3]);  i=5 [1,3,4] -> (3,[1,4])
-    df = DataFrame([[10, 40, 20, 50, 30]])
+    df = pl.DataFrame([[10, 40, 20, 50, 30]], orient="row")
     combos = get_pointwise_tgt_context_sets(
         df, context_size=2, iqr_noise_reduction=False
     )
@@ -42,7 +42,7 @@ def test_exact_single_row_context_size_2_iqr_false():
 def test_exact_single_row_context_size_2_iqr_true():
     # Same as above but iqr_noise_reduction=True: iqr_start=1.25, iqr_end=3.75
     # -> skip i where 1.25 < i < 3.75 (i.e. i=2,3). Keep i=1,4,5.
-    df = DataFrame([[10, 40, 20, 50, 30]])
+    df = pl.DataFrame([[10, 40, 20, 50, 30]], orient="row")
     combos = get_pointwise_tgt_context_sets(
         df, context_size=2, iqr_noise_reduction=True
     )
@@ -55,7 +55,7 @@ def test_context_length_and_count_iqr_false():
     # columns, so end-start == n_cols). Every context list has length context_size.
     rng = np.random.default_rng(1)
     n_rows, n_cols, cs = 6, 12, 4
-    df = DataFrame(rng.normal(size=(n_rows, n_cols)))
+    df = pl.DataFrame(rng.normal(size=(n_rows, n_cols)))
     combos = get_pointwise_tgt_context_sets(
         df, context_size=cs, iqr_noise_reduction=False
     )
@@ -70,7 +70,7 @@ def test_context_length_and_count_iqr_false():
 def test_iqr_true_is_subset_count_of_false():
     # iqr filtering only removes some targets, so it yields fewer combinations.
     rng = np.random.default_rng(2)
-    df = DataFrame(rng.normal(size=(5, 16)))
+    df = pl.DataFrame(rng.normal(size=(5, 16)))
     n_false = len(get_pointwise_tgt_context_sets(df, context_size=4, iqr_noise_reduction=False))
     n_true = len(get_pointwise_tgt_context_sets(df, context_size=4, iqr_noise_reduction=True))
     assert 0 < n_true < n_false

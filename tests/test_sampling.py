@@ -1,7 +1,7 @@
 """Tests for the ported sampling utilities (stock_embeddings.sampling)."""
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 import torch
 from scipy.stats import norm
@@ -85,34 +85,34 @@ def test_get_cooccurrence_counts_structure(make_returns_dataset):
 # --------------------------------------------------------------------------- #
 # test_ticker_cooccurrence_significance
 # --------------------------------------------------------------------------- #
-def test_significance_matches_manual_positive():
-    # index = sample tickers, columns = query tickers
-    df = pd.DataFrame(
+def _cooccurrence_df():
+    # First column "ticker" = row (sample) tickers; remaining columns = query
+    # tickers. Matches the polars matrix layout used by get_pairwise_p_values.
+    return pl.DataFrame(
         {
-            "AAA": {"AAA": 0, "BBB": 8, "CCC": 2},
-            "BBB": {"AAA": 5, "BBB": 0, "CCC": 5},
-            "CCC": {"AAA": 3, "BBB": 3, "CCC": 0},
+            "ticker": ["AAA", "BBB", "CCC"],
+            "AAA": [0, 8, 2],
+            "BBB": [5, 0, 5],
+            "CCC": [3, 3, 0],
         }
     )
+
+
+def test_significance_matches_manual_positive():
+    df = _cooccurrence_df()
     p = ticker_cooccurrence_significance(
         "AAA", "BBB", df, test_direction="positive_samples"
     )
-    observed = df.loc["BBB", "AAA"]
+    observed = df.filter(pl.col("ticker") == "BBB")["AAA"][0]
     total = df["AAA"].sum()
-    exp = 1 / len(df)
+    exp = 1 / df.height
     obs_prop = observed / total
     ts = (obs_prop - exp) / np.sqrt(exp * (1 - exp) / total)
     assert p == pytest.approx(norm.sf(ts))
 
 
 def test_significance_alpha_returns_bool():
-    df = pd.DataFrame(
-        {
-            "AAA": {"AAA": 0, "BBB": 8, "CCC": 2},
-            "BBB": {"AAA": 5, "BBB": 0, "CCC": 5},
-            "CCC": {"AAA": 3, "BBB": 3, "CCC": 0},
-        }
-    )
+    df = _cooccurrence_df()
     result = ticker_cooccurrence_significance(
         "AAA", "BBB", df, alpha=0.05, test_direction="positive_samples"
     )
@@ -134,7 +134,7 @@ def test_get_pairwise_p_values_columns(make_returns_dataset):
     ]
     dist = get_cooccurrence_counts(tgt_context_sets, data, verbose=False)
     df = get_pairwise_p_values(dist, data, return_dataframe=True)
-    assert list(df.columns) == [
+    assert df.columns == [
         "query_ticker",
         "sample_ticker",
         "count",
@@ -142,17 +142,21 @@ def test_get_pairwise_p_values_columns(make_returns_dataset):
         "query_ticker_idx",
         "sample_ticker_idx",
     ]
-    assert len(df) > 0
+    assert df.height > 0
     # idx columns are the ticker2idx mapping of the corresponding ticker columns.
-    assert (df["query_ticker_idx"] == df["query_ticker"].map(data.ticker2idx)).all()
-    assert (df["sample_ticker_idx"] == df["sample_ticker"].map(data.ticker2idx)).all()
+    assert df["query_ticker_idx"].to_list() == [
+        data.ticker2idx[t] for t in df["query_ticker"].to_list()
+    ]
+    assert df["sample_ticker_idx"].to_list() == [
+        data.ticker2idx[t] for t in df["sample_ticker"].to_list()
+    ]
 
 
 # --------------------------------------------------------------------------- #
 # get_sampling_distribution
 # --------------------------------------------------------------------------- #
 def _pairwise_df():
-    return pd.DataFrame(
+    return pl.DataFrame(
         {
             "query_ticker": ["AAA", "AAA", "AAA", "AAA"],
             "sample_ticker": ["BBB", "CCC", "DDD", "EEE"],

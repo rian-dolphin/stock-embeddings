@@ -1,7 +1,7 @@
 from typing import Literal
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import torch
 from scipy.stats import norm
 from torch.utils.data import Dataset
@@ -55,9 +55,13 @@ def get_cooccurrence_counts(
         all_samples = np.array(
             [xi[1] for xi in tgt_context_sets if xi[0] == i]
         ).flatten()
-        sample_count = pd.Series(all_samples).value_counts()
-        sample_count.index = sample_count.index.map(data.idx2ticker)
-        sample_count = sample_count.to_dict()
+        counts = pl.Series("value", all_samples).value_counts()
+        sample_count = {
+            data.idx2ticker[int(v)]: int(c)
+            for v, c in zip(
+                counts["value"].to_list(), counts["count"].to_list()
+            )
+        }
         # Add zero cooccurrences
         zero_cooccurrences = (
             set(data.tickers) - set(sample_count.keys()) - set([ticker])
@@ -90,7 +94,9 @@ def test_ticker_cooccurrence_significance(
     Parameters:
     - t1 (str): The first stock ticker symbol.
     - t2 (str): The second stock ticker symbol, cooccurrence with t1 is tested.
-    - distributions_df (pd.DataFrame): A dataframe containing the cooccurrence distributions of stock tickers.
+    - distributions_df (pl.DataFrame): A polars dataframe containing the cooccurrence
+      distributions of stock tickers. The first column ``ticker`` holds the row
+      (sample) ticker labels; the remaining columns are one per query ticker.
     - test_direction (Literal["positive_samples", "negative_samples"], optional): Specifies the direction of the test;
       'positive_samples' for testing higher than expected cooccurrences, 'negative_samples' for lower.
       Defaults to 'positive_samples'.
@@ -111,9 +117,12 @@ def test_ticker_cooccurrence_significance(
     Example usage: test_ticker_cooccurrence_significance("JPM", "C", positive_sample_distributions, verbose=True, test_direction="positive_samples")
     """
 
-    observed_count = distributions_df.loc[t2, t1]
-    t1_samples_total = distributions_df[t1].sum()
-    expected_proportion = 1 / len(distributions_df)
+    # Cast to numpy floats so a zero column total yields nan (via numpy
+    # division) rather than a Python ZeroDivisionError, matching the original
+    # pandas/numpy behavior.
+    observed_count = np.float64(distributions_df.filter(pl.col("ticker") == t2)[t1][0])
+    t1_samples_total = np.float64(distributions_df[t1].sum())
+    expected_proportion = 1 / distributions_df.height
     observed_proportion = observed_count / t1_samples_total
     # Test statistic - see https://online.stat.psu.edu/statprogram/reviews/statistical-concepts/proportions
     test_statistic = (observed_proportion - expected_proportion) / (
@@ -141,7 +150,7 @@ def get_pairwise_p_values(
     positive_sample_distributions: dict,
     data: ReturnsData,
     return_dataframe: bool = True,
-) -> pd.DataFrame | list:
+) -> pl.DataFrame | list:
     """
     Calculates the p-values for the significance of cooccurrence between pairs of stock tickers
     based on positive sample distributions.
@@ -157,11 +166,11 @@ def get_pairwise_p_values(
       by `get_cooccurrence_counts`.
     - data: An instance of the ReturnsData class, or similar, containing at least 'tickers', 'ticker2idx', and
       'idx2ticker' attributes for mapping between ticker symbols and indices.
-    - return_dataframe (bool, optional): If True, returns the results as a pandas DataFrame. Otherwise, returns a list
+    - return_dataframe (bool, optional): If True, returns the results as a polars DataFrame. Otherwise, returns a list
       of tuples. Defaults to True.
 
     Returns:
-    - Union[pd.DataFrame, list]: Depending on `return_df`, either a DataFrame with columns ["query_ticker",
+    - Union[pl.DataFrame, list]: Depending on `return_df`, either a DataFrame with columns ["query_ticker",
       "sample_ticker", "count", "p_value", "query_ticker_idx", "sample_ticker_idx"] or a list of tuples with each
       tuple containing the query ticker, sample ticker, cooccurrence count, and p-value for the significance of
       their cooccurrence.
@@ -171,9 +180,21 @@ def get_pairwise_p_values(
     for further analysis in financial studies, such as network analysis or identifying potentially correlated assets.
     """
     tuples = []
-    positive_sample_distributions_df = pd.DataFrame(
-        positive_sample_distributions
-    ).fillna(0)
+    # -- Build the cooccurrence matrix as a polars frame: the first column
+    # - "ticker" holds the row (sample) ticker labels and each remaining column
+    # - is one query ticker. Missing entries are filled with 0 (mirrors the
+    # - pandas DataFrame(dict-of-dicts).fillna(0) layout).
+    row_tickers = []
+    seen = set()
+    for inner in positive_sample_distributions.values():
+        for key in inner.keys():
+            if key not in seen:
+                seen.add(key)
+                row_tickers.append(key)
+    matrix_data = {"ticker": row_tickers}
+    for query, inner in positive_sample_distributions.items():
+        matrix_data[query] = [inner.get(rt, 0) for rt in row_tickers]
+    positive_sample_distributions_df = pl.DataFrame(matrix_data)
 
     for ticker in tqdm(positive_sample_distributions.keys()):
         for t, c in positive_sample_distributions[ticker].items():
@@ -187,15 +208,19 @@ def get_pairwise_p_values(
             tuples.append((ticker, t, c, p_value_positive))
 
     if return_dataframe:
-        pairwise_p_value_df = pd.DataFrame(
-            tuples, columns=["query_ticker", "sample_ticker", "count", "p_value"]
+        pairwise_p_value_df = pl.DataFrame(
+            tuples,
+            schema=["query_ticker", "sample_ticker", "count", "p_value"],
+            orient="row",
         )
-        pairwise_p_value_df["query_ticker_idx"] = pairwise_p_value_df[
-            "query_ticker"
-        ].map(data.ticker2idx)
-        pairwise_p_value_df["sample_ticker_idx"] = pairwise_p_value_df[
-            "sample_ticker"
-        ].map(data.ticker2idx)
+        pairwise_p_value_df = pairwise_p_value_df.with_columns(
+            pl.col("query_ticker")
+            .replace_strict(data.ticker2idx)
+            .alias("query_ticker_idx"),
+            pl.col("sample_ticker")
+            .replace_strict(data.ticker2idx)
+            .alias("sample_ticker_idx"),
+        )
         return pairwise_p_value_df
     else:
         return tuples
@@ -203,7 +228,7 @@ def get_pairwise_p_values(
 
 def get_sampling_distribution(
     ticker: str,
-    pairwise_p_value_df: pd.DataFrame,
+    pairwise_p_value_df: pl.DataFrame,
     sample_type: Literal["positive_samples", "negative_samples"] = "positive_samples",
     power: int = 1,
     positive_threshold: float = 0.1,
@@ -214,7 +239,7 @@ def get_sampling_distribution(
 
     Parameters:
     - ticker (str): The ticker symbol for which the sampling distribution is generated.
-    - pairwise_p_value_df (pd.DataFrame): A DataFrame containing sample data. Expected columns include
+    - pairwise_p_value_df (pl.DataFrame): A DataFrame containing sample data. Expected columns include
       'query_ticker', 'sample_ticker', 'count', and 'p_value'.
     - sample_type (Literal["positive_samples", "negative_samples"], optional): Determines the type of samples to include
       in the distribution. 'positive_samples' selects samples with p_value below positive_threshold,
@@ -238,30 +263,34 @@ def get_sampling_distribution(
     power, and normalizes the probabilities. The result is a distribution of probabilities associated with each
     sample ticker related to the query ticker.
     """
-    filtered_df = pairwise_p_value_df[
-        pairwise_p_value_df["query_ticker"] == ticker
-    ].copy()
+    filtered_df = pairwise_p_value_df.filter(pl.col("query_ticker") == ticker)
     if sample_type == "positive_samples":
-        filtered_df = filtered_df[filtered_df["p_value"] < positive_threshold].copy()
+        filtered_df = filtered_df.filter(pl.col("p_value") < positive_threshold)
     elif sample_type == "negative_samples":
-        filtered_df = filtered_df[
-            1 - filtered_df["p_value"] < negative_threshold
-        ].copy()
+        filtered_df = filtered_df.filter(
+            1 - pl.col("p_value") < negative_threshold
+        )
         # -- Make it so that lower counts will have high pos_prob
-        filtered_df["count"] = filtered_df["count"].max() - filtered_df["count"]
+        max_count = filtered_df["count"].max()
+        filtered_df = filtered_df.with_columns(
+            (max_count - pl.col("count")).alias("count")
+        )
     else:
         raise ValueError("Invalid sample_type")
-    filtered_df["pos_prob"] = filtered_df["count"] / filtered_df["count"].sum()
+    count_total = filtered_df["count"].sum()
+    filtered_df = filtered_df.with_columns(
+        (pl.col("count") / count_total).alias("pos_prob")
+    )
     if power > 1:
         # -- Raise to a power to make high values more prominent in the resulting distribution
-        filtered_df["pos_prob"] = filtered_df["pos_prob"] ** power
-        filtered_df["pos_prob"] = (
-            filtered_df["pos_prob"] / filtered_df["pos_prob"].sum()
+        prob_total = (filtered_df["pos_prob"] ** power).sum()
+        filtered_df = filtered_df.with_columns(
+            ((pl.col("pos_prob") ** power) / prob_total).alias("pos_prob")
         )
 
-    filtered_distribution = filtered_df[
+    filtered_distribution = filtered_df.select(
         ["query_ticker", "sample_ticker", "pos_prob"]
-    ].values
+    ).to_numpy()
 
     return filtered_distribution
 

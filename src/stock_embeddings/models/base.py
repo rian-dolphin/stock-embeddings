@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+import polars as pl
 import plotly.express as px
 import torch
 import torch.nn as nn
@@ -87,11 +87,11 @@ class BaseModel(nn.Module):
 
         reduced_data = reduction.fit_transform(embeddings)
 
-        # convert the reduced data, class labels, and entity names to a pandas DataFrame for plotting
-        df = pd.DataFrame(
+        # convert the reduced data, class labels, and entity names to a polars DataFrame for plotting
+        df = pl.DataFrame(
             {"x": reduced_data[:, 0], "y": reduced_data[:, 1], "label": labels}
         )
-        df = df.sort_values(by="label")
+        df = df.sort("label")
 
         # plot the data using plotly, colored by the class labels
         fig = px.scatter(df, x="x", y="y", color="label", hover_name="label")
