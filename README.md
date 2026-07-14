@@ -1,6 +1,6 @@
 # Learning Embedding Representations for Stocks from Returns Time Series
 
-> Code originally written in 2022 and refactored to use uv and polars in 2026.
+> Code originally written in 2021/2022 and refactored to use uv and polars in 2026.
 
 Code for learning distributed representations (embeddings) of financial assets from returns time series, relating to the paper *Stock Embeddings: Learning Distributed Representations for Financial Assets* [[pdf](https://arxiv.org/pdf/2202.08968.pdf)].
 
