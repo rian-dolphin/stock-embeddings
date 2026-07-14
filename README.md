@@ -30,8 +30,6 @@ The notebooks import the installed package, e.g.:
 from stock_embeddings import ReturnsData, ClassificationEmbeddings
 ```
 
-Further experiments (UCR benchmarks, matrix-factorization baselines, hedging analysis, thesis plots) are archived on the [`working`](../../tree/working) branch.
-
 ## Data
 
 Data files are too large to be stored in the repo but feel free to reach out to me via email: dolphrian@gmail.com
