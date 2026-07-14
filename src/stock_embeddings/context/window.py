@@ -163,4 +163,3 @@ def extract_indices(
     np.fill_diagonal(sim_matrix, -1)
     indices = np.argpartition(sim_matrix, -context_size, axis=1)[:, -context_size:]
     return [(i, list(xi)) for i, xi in enumerate(indices)]
-    return [(i, list(xi)) for i, xi in enumerate(indices)]

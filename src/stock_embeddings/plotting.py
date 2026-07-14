@@ -8,7 +8,7 @@ Created on Tue Sep  7 12:50:56 2021
 
 from enum import Enum
 
-import pandas as pd
+import polars as pl
 import plotly.express as px
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -69,11 +69,11 @@ def pca_plot_from_embeddings(
 
     # Subset for reduced plot
     if reduced:
-        plot_df = plot_df[
-            plot_df["sector"].isin(
+        plot_df = plot_df.filter(
+            pl.col("sector").is_in(
                 ["TECHNOLOGY", "FINANCE", "ENERGY", "PUBLIC UTILITIES"]
             )
-        ]
+        )
 
     if dimensions == 2:
         plot_2d(plot_df)
@@ -86,7 +86,7 @@ def pca_plot_from_embeddings(
 
 def create_dataframe(vals, sectors, tickers, industries, names):
     """Create a DataFrame for plotting."""
-    return pd.DataFrame(
+    return pl.DataFrame(
         {
             "latent1": vals[:, 0],
             "latent2": vals[:, 1],

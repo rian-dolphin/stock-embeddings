@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models.base_model import BaseModel
+from stock_embeddings.models.base import BaseModel
 
 
 class ClassificationEmbeddings(BaseModel):
