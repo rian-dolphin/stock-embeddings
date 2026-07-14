@@ -15,7 +15,9 @@ class ReturnsData:
         self.period = 1
 
     def _get_data(self):
-        daily_returns_df = pl.read_csv(self.daily_returns_path)
+        # -- Full-column schema inference: a ticker column with many leading
+        # - blanks must still parse as float, not string
+        daily_returns_df = pl.read_csv(self.daily_returns_path, infer_schema_length=None)
         # -- The first column holds the dates (empty header in the CSV files).
         date_col = daily_returns_df.columns[0]
         daily_returns_df = daily_returns_df.rename({date_col: "date"}).with_columns(

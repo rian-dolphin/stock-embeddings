@@ -79,6 +79,18 @@ def test_unsorted_columns_are_sorted_and_aligned(make_returns_dataset):
     )
 
 
+def test_gappy_leading_column_parses_as_float(make_returns_dataset):
+    # A ticker column whose first >100 rows are empty must still be inferred
+    # as float (full-column schema inference), matching pandas behavior.
+    rpath, epath, returns_df, _ = make_returns_dataset(n_days=150, include_misc=False)
+    df = pl.read_csv(rpath, infer_schema_length=None)
+    gappy = pl.Series("AAA", [None] * 120 + df["AAA"].to_list()[120:])
+    df.with_columns(gappy).write_csv(rpath)
+    rd = ReturnsData(rpath, epath)
+    assert rd.returns_df["AAA"].dtype == pl.Float64
+    rd.change_returns_period(3)  # must not raise on arithmetic
+
+
 def test_missing_extras_metadata_raises(make_returns_dataset, tmp_path):
     rpath, epath, _, extras_df = make_returns_dataset(include_misc=False)
     # Drop one ticker's metadata row -> clear error instead of misalignment.
