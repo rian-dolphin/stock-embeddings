@@ -23,7 +23,9 @@ class BaseModel(nn.Module):
     @classmethod
     def load_model(cls, path, device="cpu"):
         # Load the state dict from the file
-        state_dict = torch.load(path, map_location=torch.device(device))
+        state_dict = torch.load(
+            path, map_location=torch.device(device), weights_only=True
+        )
 
         # Infer n_time_series and embedding_dim from the embeddings layer
         # Assuming the name of the embeddings layer in the state_dict is 'embeddings.weight'
