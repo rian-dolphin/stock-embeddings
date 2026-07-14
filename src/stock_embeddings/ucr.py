@@ -600,8 +600,8 @@ def get_eval_df(
         # ),
         (
             "prop+rocket",
-            np.concatenate([c22_train, rocket_train], axis=1),
-            np.concatenate([c22_test, rocket_test], axis=1),
+            np.concatenate([embeddings_train, rocket_train], axis=1),
+            np.concatenate([embeddings_test, rocket_test], axis=1),
         ),
     )
 

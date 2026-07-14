@@ -243,3 +243,65 @@ def test_require_sktime_returns_symbols():
     sk = _require_sktime()
     assert "Catch22" in sk
     assert "load_UCR_UEA_dataset" in sk
+
+
+@sktime_required
+def test_get_eval_df_prop_rocket_uses_proposed_embeddings(monkeypatch):
+    # "prop+rocket" must concatenate the proposed embeddings with the rocket
+    # features (the original code mistakenly used catch22 features). Stub the
+    # feature extraction with distinct widths per transformer and record what
+    # each method passes into the evaluation.
+    import stock_embeddings.ucr as ucr_mod
+
+    rng = np.random.default_rng(0)
+    n_train, n_test, series_len = 12, 8, 24
+    widths = {
+        "Catch22": 5,
+        "SummaryTransformer": 6,
+        "RandomIntervalFeatureExtractor": 7,
+        "Rocket": 8,
+    }
+    embed_dim = 4
+
+    class StubData:
+        name = "Stub"
+        X_train = rng.normal(size=(n_train, series_len))
+        X_test = rng.normal(size=(n_test, series_len))
+        y = np.array(["a", "b"] * ((n_train + n_test) // 2))
+
+        def get_sktime_features_unsupervised(self, X_train, X_test, transformer):
+            w = widths[type(transformer).__name__]
+            return rng.normal(size=(n_train, w)), rng.normal(size=(n_test, w))
+
+    seen_widths = []
+
+    def fake_eval(X_train, X_test, y_train, y_test, **kwargs):
+        assert X_train.shape[1] == X_test.shape[1]
+        seen_widths.append(X_train.shape[1])
+        report = {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "accuracy": 1.0,
+            "classification_time": 0.0,
+            "feature_time": 0.0,
+        }
+        return report, None, None
+
+    monkeypatch.setattr(ucr_mod, "evaluate_resampling_UCR", fake_eval)
+    embeddings = rng.normal(size=(n_train + n_test, embed_dim))
+    df = ucr_mod.get_eval_df(StubData(), embeddings, n_resamples=1)
+
+    # feature_pairs call order is fixed in get_eval_df; each feature pair is
+    # evaluated once per classifier ("<feature> <clf>" labels), grouped
+    # consecutively. Map widths via the call order, not the (sorted) frame.
+    call_order = ["proposed", "c22", "summary", "rfe", "rocket", "raw", "prop+rocket"]
+    assert len(seen_widths) % len(call_order) == 0
+    n_clf = len(seen_widths) // len(call_order)
+    assert {m.split(" ")[0] for m in df["method"].to_list()} == set(call_order)
+    groups = [seen_widths[i * n_clf : (i + 1) * n_clf] for i in range(len(call_order))]
+    assert all(len(set(g)) == 1 for g in groups)  # constant width per feature
+    by_method = dict(zip(call_order, (g[0] for g in groups)))
+    assert by_method["proposed"] == embed_dim
+    assert by_method["rocket"] == widths["Rocket"]
+    assert by_method["prop+rocket"] == embed_dim + widths["Rocket"]
