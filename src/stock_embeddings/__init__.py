@@ -14,12 +14,14 @@ from stock_embeddings.losses import (
 from stock_embeddings.models.base import BaseModel
 from stock_embeddings.models.classification import ClassificationEmbeddings
 from stock_embeddings.models.contrastive import ContrastiveMultiPN
+from stock_embeddings.models.matrix_factorization import MatrixFactorization
 from stock_embeddings.training import train_embeddings_from_tgt_context_sets
 
 __all__ = [
     "ReturnsData",
     "ClassificationEmbeddings",
     "ContrastiveMultiPN",
+    "MatrixFactorization",
     "BaseModel",
     "get_pointwise_tgt_context_sets",
     "get_target_context_sets",
