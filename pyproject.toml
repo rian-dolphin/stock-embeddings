@@ -21,6 +21,13 @@ dependencies = [
 requires = ["uv_build>=0.11.0,<0.12.0"]
 build-backend = "uv_build"
 
+[tool.pytest.ini_options]
+# Make the flat `utils`/`models` packages importable from the repo root.
+# After the restructure to src/stock_embeddings, only the imports in the
+# test files need to change; these settings can stay.
+pythonpath = ["."]
+testpaths = ["tests"]
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.3.0",
