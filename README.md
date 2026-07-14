@@ -6,7 +6,7 @@ Code for learning distributed representations (embeddings) of financial assets f
 
 ## Where to start
 
-**New here? Run [`notebooks/pointwise_embeddings.ipynb`](notebooks/pointwise_embeddings.ipynb).** It is the notebook for the original Stock Embeddings paper and walks the whole pipeline end-to-end: load returns, build target/context sets, train embeddings, and evaluate them on sector classification. After `uv sync` and dropping the data files into `Data/` (see [Data](#data)), it runs top to bottom in a few minutes.
+**Run [`notebooks/pointwise_embeddings.ipynb`](notebooks/pointwise_embeddings.ipynb).** It is the notebook for the original Stock Embeddings paper and walks the whole pipeline end-to-end: load returns, build target/context sets, train embeddings, and evaluate them on sector classification. After `uv sync` and dropping the data files into `Data/` (see [Data](#data)), it runs top to bottom in a few minutes.
 
 Each notebook maps to a paper:
 
