@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from models.embedding_models import ClassificationEmbeddings
-from utils.training_helpers import (
+from stock_embeddings.models.classification import ClassificationEmbeddings
+from stock_embeddings.training import (
     get_train_loader,
     should_early_stop,
     train_embeddings_from_tgt_context_sets,

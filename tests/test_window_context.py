@@ -5,7 +5,7 @@ import pytest
 from scipy.spatial.distance import pdist, squareform
 from scipy.stats import pearsonr
 
-from utils.window_context import (
+from stock_embeddings.context.window import (
     Euclidean,
     ICCBRMetric,
     Pearson,

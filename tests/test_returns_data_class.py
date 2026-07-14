@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from utils.returns_data_class import ReturnsData
+from stock_embeddings.data import ReturnsData
 
 
 def test_misc_sector_ticker_removed(make_returns_dataset):

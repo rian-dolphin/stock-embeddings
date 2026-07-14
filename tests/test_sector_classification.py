@@ -7,7 +7,7 @@ import pytest
 from sklearn.datasets import make_blobs
 from sklearn.linear_model import LogisticRegression
 
-from utils.sector_classification import get_sector_score
+from stock_embeddings.evaluation import get_sector_score
 
 
 def _blobs(seed=0):

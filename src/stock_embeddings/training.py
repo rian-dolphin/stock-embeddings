@@ -6,7 +6,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from models.base_model import BaseModel
+from stock_embeddings.models.base import BaseModel
 
 # Constants
 LEARNING_RATE: float = 0.0001

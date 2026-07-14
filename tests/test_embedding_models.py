@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from models.base_model import BaseModel
-from models.embedding_models import ClassificationEmbeddings
+from stock_embeddings.models.base import BaseModel
+from stock_embeddings.models.classification import ClassificationEmbeddings
 
 
 def _model(n=6, dim=4, seed=0):

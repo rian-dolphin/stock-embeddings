@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pandas import DataFrame
 
-from utils.pointwise_context import get_pointwise_tgt_context_sets
+from stock_embeddings.context.pointwise import get_pointwise_tgt_context_sets
 
 
 def _plain(combos):
