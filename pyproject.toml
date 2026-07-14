@@ -5,16 +5,22 @@ description = "Learning distributed representations (embeddings) for financial a
 authors = [
     { name = "rian-dolphin", email = "rdolphin98@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "imbalanced-learn>=0.14.2",
-    "numpy>=2.5.1",
+    "numpy>=2.0",
     "plotly>=6.9.0",
     "polars>=1.42.1",
-    "scikit-learn>=1.9.0",
+    "scikit-learn>=1.3",
     "scipy>=1.18.0",
     "torch>=2.13.0",
     "tqdm>=4.68.4",
+]
+
+[project.optional-dependencies]
+ucr = [
+    "dtaidistance>=2.4.0",
+    "sktime>=1.0",
 ]
 
 [build-system]
