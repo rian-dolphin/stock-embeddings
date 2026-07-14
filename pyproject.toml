@@ -9,7 +9,6 @@ requires-python = ">=3.12"
 dependencies = [
     "imbalanced-learn>=0.14.2",
     "numpy>=2.5.1",
-    "pandas>=3.0.3",
     "plotly>=6.9.0",
     "polars>=1.42.1",
     "scikit-learn>=1.9.0",
