@@ -4,11 +4,19 @@
 
 Code for learning distributed representations (embeddings) of financial assets from returns time series, relating to the paper *Stock Embeddings: Learning Distributed Representations for Financial Assets* [[pdf](https://arxiv.org/pdf/2202.08968.pdf)].
 
-Relevant papers:
-- Original work on learning Stock Embeddings [[pdf](https://arxiv.org/pdf/2202.08968.pdf)]
-- Improved results using contrastive learning for asset embeddings [[pdf](https://arxiv.org/pdf/2407.18645)]
-  - [Accepted](https://dl.acm.org/doi/10.1145/3677052.3698610) at ICAIF 2024
-- Leveraging financial news for multimodal asset embeddings [[pdf](https://arxiv.org/pdf/2211.06378)]
+## Where to start
+
+**New here? Run [`notebooks/pointwise_embeddings.ipynb`](notebooks/pointwise_embeddings.ipynb).** It is the notebook for the original Stock Embeddings paper and walks the whole pipeline end-to-end: load returns, build target/context sets, train embeddings, and evaluate them on sector classification. After `uv sync` and dropping the data files into `Data/` (see [Data](#data)), it runs top to bottom in a few minutes.
+
+Each notebook maps to a paper:
+
+| Notebook | Paper |
+|---|---|
+| [`notebooks/pointwise_embeddings.ipynb`](notebooks/pointwise_embeddings.ipynb) | Original Stock Embeddings paper [[pdf](https://arxiv.org/pdf/2202.08968.pdf)] — **start here** |
+| [`notebooks/window_embeddings.ipynb`](notebooks/window_embeddings.ipynb) | Window-based variant of the original approach |
+| [`notebooks/contrastive/`](notebooks/contrastive) | Contrastive learning for asset embeddings [[pdf](https://arxiv.org/pdf/2407.18645)], [accepted](https://dl.acm.org/doi/10.1145/3677052.3698610) at ICAIF 2024 — the four notebooks build up from a triplet margin loss to the full experiment |
+
+A related third paper, leveraging financial news for multimodal asset embeddings [[pdf](https://arxiv.org/pdf/2211.06378)], does not have code in this repo.
 
 ## Setup
 
