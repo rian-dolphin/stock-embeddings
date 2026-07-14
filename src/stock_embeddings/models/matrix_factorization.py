@@ -157,6 +157,10 @@ class MatrixFactorization(BaseModel):
         if return_similarity:
             return_matrix = -return_matrix
             np.fill_diagonal(return_matrix, np.inf)
+        # KNOWN BROKEN (present in the original code too): return_matrix is a
+        # numpy array here, and fill_diagonal_ is a torch method, so every call
+        # raises AttributeError. Preserved verbatim pending a decision on the
+        # DTW path (also requires a dtaidistance build with the C library).
         return_matrix.fill_diagonal_(np.nan)
         return torch.tensor(return_matrix)
 

@@ -15,6 +15,7 @@ Each notebook maps to a paper:
 | [`notebooks/pointwise_embeddings.ipynb`](notebooks/pointwise_embeddings.ipynb) | Original Stock Embeddings paper [[pdf](https://arxiv.org/pdf/2202.08968.pdf)] — **start here** |
 | [`notebooks/window_embeddings.ipynb`](notebooks/window_embeddings.ipynb) | Window-based variant of the original approach |
 | [`notebooks/contrastive/`](notebooks/contrastive) | Contrastive learning for asset embeddings [[pdf](https://arxiv.org/pdf/2407.18645)], [accepted](https://dl.acm.org/doi/10.1145/3677052.3698610) at ICAIF 2024 — the four notebooks build up from a triplet margin loss to the full experiment |
+| [`notebooks/ucr/`](notebooks/ucr) | Unpublished experiments transferring the embedding methods to the [UCR/UEA](https://www.timeseriesclassification.com/) time-series-classification benchmark (matrix-factorization embeddings vs Catch22/Rocket baselines). Needs the `ucr` extra (see [Setup](#setup)); datasets download automatically, no `Data/` files required |
 
 A related third paper, leveraging financial news for multimodal asset embeddings [[pdf](https://arxiv.org/pdf/2211.06378)], does not have code in this repo.
 
@@ -24,6 +25,12 @@ The project is managed with [uv](https://docs.astral.sh/uv/). To create the envi
 
 ```bash
 uv sync
+```
+
+The UCR benchmark experiments need extra dependencies (sktime, numba, dtaidistance) that the core package doesn't require:
+
+```bash
+uv sync --extra ucr
 ```
 
 Run the test suite:

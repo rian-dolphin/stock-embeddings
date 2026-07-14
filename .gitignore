@@ -162,3 +162,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# UCR notebook result artifacts
+eval_*.parquet
