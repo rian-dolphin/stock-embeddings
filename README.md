@@ -1,5 +1,7 @@
 # Learning Embedding Representations for Stocks from Returns Time Series
 
+> Code originally written in 2022 and refactored to use uv and polars in 2026.
+
 Code for learning distributed representations (embeddings) of financial assets from returns time series, relating to the paper *Stock Embeddings: Learning Distributed Representations for Financial Assets* [[pdf](https://arxiv.org/pdf/2202.08968.pdf)].
 
 Relevant papers:
@@ -20,30 +22,6 @@ Run the test suite:
 
 ```bash
 uv run pytest
-```
-
-## Repository structure
-
-```
-src/stock_embeddings/    # the library
-  data.py                # ReturnsData: loading returns + ticker metadata
-  context/               # target/context set generation
-    pointwise.py         #   pointwise (single-period) contexts
-    window.py            #   window-based contexts + similarity metrics
-  models/                # PyTorch models
-    base.py              #   shared BaseModel (save/load, embedding utils, plots)
-    classification.py    #   CBOW-style ClassificationEmbeddings
-    contrastive.py       #   ContrastiveMultiPN (contrastive learning)
-  losses.py              # contrastive loss functions
-  sampling.py            # positive/negative sampling + co-occurrence analysis
-  training.py            # training loop helpers
-  evaluation.py          # sector classification evaluation
-  plotting.py            # embedding visualisation
-notebooks/               # usage walkthroughs
-  pointwise_embeddings.ipynb   # original paper (arXiv:2202.08968)
-  window_embeddings.ipynb      # window-based context variant
-  contrastive/                 # contrastive asset embeddings (ICAIF 2024)
-tests/                   # pytest suite
 ```
 
 The notebooks import the installed package, e.g.:
