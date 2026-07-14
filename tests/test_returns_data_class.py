@@ -91,6 +91,28 @@ def test_gappy_leading_column_parses_as_float(make_returns_dataset):
     rd.change_returns_period(3)  # must not raise on arithmetic
 
 
+def test_data_paths_resolve_upward_from_subdirectory(
+    make_returns_dataset, tmp_path, monkeypatch
+):
+    # Notebook kernels may run from a subdirectory (e.g. notebooks/); relative
+    # data paths are searched upward through parent directories.
+    rpath, epath, _, _ = make_returns_dataset(include_misc=False)
+    subdir = tmp_path / "notebooks" / "contrastive"
+    subdir.mkdir(parents=True)
+    monkeypatch.chdir(subdir)
+    rd = ReturnsData("returns.csv", "extras.csv")
+    assert rd.tickers == ["AAA", "BBB", "CCC", "DDD"]
+    # A leading ../ that overshoots is tolerated too (same upward search).
+    rd2 = ReturnsData("../returns.csv", "../extras.csv")
+    assert rd2.tickers == rd.tickers
+
+
+def test_missing_data_file_gives_clear_error(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(FileNotFoundError, match="parent directories"):
+        ReturnsData("Data/does_not_exist.csv", "Data/also_missing.csv")
+
+
 def test_missing_extras_metadata_raises(make_returns_dataset, tmp_path):
     rpath, epath, _, extras_df = make_returns_dataset(include_misc=False)
     # Drop one ticker's metadata row -> clear error instead of misalignment.

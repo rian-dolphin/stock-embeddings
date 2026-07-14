@@ -48,6 +48,8 @@ The code expects two files in `Data/`:
 
 The first 10 rows of each data file can be found in the sample files in the `Data/` directory to show the required format.
 
+`ReturnsData` locates these files by searching upward from the current working directory, so the notebooks run regardless of whether Jupyter is launched from the repo root or the `notebooks/` directory.
+
 ## Cite as
 
 ```

@@ -1,5 +1,30 @@
+from pathlib import Path
+
 import numpy as np
 import polars as pl
+
+
+def _resolve_data_path(path):
+    """Resolve a data file path regardless of the working directory.
+
+    Jupyter kernels may run from the repo root or from the notebook's own
+    directory depending on the frontend, so a fixed relative path breaks one
+    of the two. If `path` doesn't exist as given, search for the same
+    relative path upward through the parent directories of the cwd.
+    """
+    p = Path(path)
+    if p.exists():
+        return str(p)
+    if not p.is_absolute():
+        rel = Path(*[part for part in p.parts if part != ".."])
+        for base in [Path.cwd(), *Path.cwd().parents]:
+            candidate = base / rel
+            if candidate.exists():
+                return str(candidate)
+    raise FileNotFoundError(
+        f"Could not find {path!r} relative to {Path.cwd()} or any of its "
+        "parent directories."
+    )
 
 
 class ReturnsData:
@@ -8,8 +33,8 @@ class ReturnsData:
         daily_returns_path="Data/returns_df_611.csv",
         extras_path="Data/historical_stocks.csv",
     ):
-        self.daily_returns_path = daily_returns_path
-        self.extras_path = extras_path
+        self.daily_returns_path = _resolve_data_path(daily_returns_path)
+        self.extras_path = _resolve_data_path(extras_path)
         self._get_data()
         self._get_extras()
         self.period = 1
