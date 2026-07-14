@@ -66,6 +66,44 @@ def test_tiny_training_run_records_finite_losses():
     assert len(model.losses["learning_rate"]) == epochs
 
 
+def test_training_run_without_eval_sectors():
+    # Default eval_sectors=False must not attempt sector evaluation on the
+    # epoch-print path.
+    torch.manual_seed(0)
+    np.random.seed(0)
+    model = ContrastiveMultiPN(N_TIME_SERIES, EMBED_DIM, IndividualSigmoidLoss())
+    model.train(
+        index_samples=_index_samples(),
+        batch_size=8,
+        learning_rate=0.01,
+        epochs=1,
+        normalize=False,
+        early_stopping=False,
+    )
+    assert len(model.losses["total"]) == 1
+
+
+def test_training_run_with_normalize():
+    # normalize=True unit-normalizes the embeddings at the start of each epoch.
+    torch.manual_seed(0)
+    np.random.seed(0)
+    model = ContrastiveMultiPN(N_TIME_SERIES, EMBED_DIM, IndividualSigmoidLoss())
+    model.train(
+        index_samples=_index_samples(),
+        batch_size=8,
+        learning_rate=0.01,
+        epochs=1,
+        normalize=True,
+        early_stopping=False,
+    )
+    assert len(model.losses["total"]) == 1
+    assert all(math.isfinite(v) for v in model.losses["total"])
+    # Direct call leaves every embedding with unit norm.
+    model.normalize_embeddings()
+    norms = model.embeddings.weight.norm(dim=1)
+    assert torch.allclose(norms, torch.ones_like(norms), atol=1e-6)
+
+
 def test_training_run_with_regularization():
     torch.manual_seed(1)
     np.random.seed(1)

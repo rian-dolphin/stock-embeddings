@@ -107,18 +107,20 @@ def test_train_embeddings_smoke_loss_decreases():
     assert losses[-1] < losses[0]
 
 
-def test_train_embeddings_model_none_path_raises():
-    # ODDITY (see report): when model is None the code builds
-    # initialize_model(BaseModel, n, dim), but BaseModel.__init__ only accepts
-    # `device`, so BaseModel(n, dim) raises TypeError. Pin the current behavior.
+def test_train_embeddings_model_none_builds_classification_model():
+    # When model is None, a ClassificationEmbeddings of the requested
+    # dimensions is created and trained.
+    torch.manual_seed(0)
     tcs = [(i % 4, [(i + 1) % 4, (i + 2) % 4]) for i in range(20)]
-    with pytest.raises(TypeError):
-        train_embeddings_from_tgt_context_sets(
-            n_time_series=4,
-            tgt_context_sets=tcs,
-            model=None,
-            embedding_dim=8,
-            epochs=1,
-            batch_size=4,
-            verbose=False,
-        )
+    model, losses = train_embeddings_from_tgt_context_sets(
+        n_time_series=4,
+        tgt_context_sets=tcs,
+        model=None,
+        embedding_dim=8,
+        epochs=1,
+        batch_size=4,
+        verbose=False,
+    )
+    assert isinstance(model, ClassificationEmbeddings)
+    assert model.embeddings.weight.shape == (4, 8)
+    assert len(losses) == 1 and all(isinstance(x, float) for x in losses)

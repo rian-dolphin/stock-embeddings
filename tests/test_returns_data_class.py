@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from stock_embeddings.data import ReturnsData
 
@@ -40,6 +41,34 @@ def test_sectors_industries_names_aligned_to_ticker2idx(make_returns_dataset):
         assert rd.sectors[idx] == row.sector
         assert rd.industries[idx] == row.industry
         assert rd.names[idx] == row["name"]
+
+
+def test_unsorted_columns_are_sorted_and_aligned(make_returns_dataset):
+    # Columns are sorted at load, so a ticker's embedding index (column
+    # position) always matches self.tickers and the metadata lists.
+    rpath, epath, returns_df, extras_df = make_returns_dataset(
+        include_misc=False, column_order=["CCC", "AAA", "DDD", "BBB"]
+    )
+    rd = ReturnsData(rpath, epath)
+    assert list(rd.returns_df.columns) == ["AAA", "BBB", "CCC", "DDD"]
+    assert rd.tickers == list(rd.returns_df.columns)
+    for idx, ticker in enumerate(rd.tickers):
+        assert rd.ticker2idx[ticker] == idx
+        row = extras_df[extras_df.ticker == ticker].iloc[0]
+        assert rd.sectors[idx] == row.sector
+        assert rd.names[idx] == row["name"]
+    # Returns values follow the columns, not the original file order.
+    np.testing.assert_allclose(
+        rd.daily_returns_df["CCC"].values, returns_df["CCC"].values
+    )
+
+
+def test_missing_extras_metadata_raises(make_returns_dataset, tmp_path):
+    rpath, epath, _, extras_df = make_returns_dataset(include_misc=False)
+    # Drop one ticker's metadata row -> clear error instead of misalignment.
+    extras_df[extras_df.ticker != "BBB"].to_csv(epath, index=False)
+    with pytest.raises(ValueError, match="BBB"):
+        ReturnsData(rpath, epath)
 
 
 def test_change_returns_period_period_1_noop(make_returns_dataset, capsys):

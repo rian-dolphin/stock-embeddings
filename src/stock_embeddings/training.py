@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 from stock_embeddings.models.base import BaseModel
+from stock_embeddings.models.classification import ClassificationEmbeddings
 
 # Constants
 LEARNING_RATE: float = 0.0001
@@ -61,7 +62,7 @@ def train_embeddings_from_tgt_context_sets(
     validate_params(model, embedding_dim, tgt_context_sets)
 
     if model is None:
-        model = initialize_model(BaseModel, n_time_series, embedding_dim)
+        model = initialize_model(ClassificationEmbeddings, n_time_series, embedding_dim)
     else:
         embedding_dim = model.embeddings.weight.shape[1]
 

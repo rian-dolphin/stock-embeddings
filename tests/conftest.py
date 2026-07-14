@@ -20,9 +20,9 @@ def make_returns_dataset(tmp_path):
     frames that were written to disk.
     """
 
-    def _make(n_days=10, seed=0, include_misc=True):
+    def _make(n_days=10, seed=0, include_misc=True, column_order=None):
         dates = pd.date_range("2020-01-01", periods=n_days, freq="D")
-        tickers = ["AAA", "BBB", "CCC", "DDD"]
+        tickers = column_order or ["AAA", "BBB", "CCC", "DDD"]
         rng = np.random.default_rng(seed)
         # Small returns, no NaNs (keeps pct_change/cumprod math clean).
         data = rng.normal(0.0, 0.01, size=(n_days, len(tickers)))

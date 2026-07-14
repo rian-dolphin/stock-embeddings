@@ -17,6 +17,9 @@ class ReturnsData:
     def _get_data(self):
         daily_returns_df = pd.read_csv(self.daily_returns_path, index_col=0)
         daily_returns_df.index = pd.to_datetime(daily_returns_df.index)
+        # -- Sort columns so a ticker's embedding index (its column position)
+        # - always matches the sorted self.tickers list
+        daily_returns_df = daily_returns_df[sorted(daily_returns_df.columns)]
         self.daily_returns_df = daily_returns_df
         self.returns_df = self.daily_returns_df
 
@@ -55,6 +58,14 @@ class ReturnsData:
         tickers = list(self.returns_df.columns)
         self.tickers = sorted(tickers)
 
+        # -- Every ticker must have metadata, otherwise the sector/industry/name
+        # - lists below would silently misalign with the embedding indices
+        missing = set(tickers) - set(self.extras_df.ticker)
+        if missing:
+            raise ValueError(
+                f"Tickers missing from {self.extras_path}: {sorted(missing)}"
+            )
+
         # -- Create dict to act as mapping between tickers and index
         # - This is useful for extracting specific embeddings from the embedding matrix
         self.ticker2idx = {ticker: idx for (idx, ticker) in enumerate(tickers)}
@@ -73,6 +84,23 @@ class ReturnsData:
             self.extras_df[self.extras_df.ticker == ticker].name.values[0]
             for ticker in tickers
         ]
+
+        self._validate_alignment()
+
+    def _validate_alignment(self):
+        """Embedding index i must correspond to column i of returns_df; every
+        ticker-indexed attribute (tickers, ticker2idx, sectors, ...) has to
+        follow that same order or downstream results silently misalign."""
+        columns = list(self.returns_df.columns)
+        if self.tickers != columns:
+            raise ValueError(
+                "self.tickers is not aligned with returns_df column order; "
+                "embedding indices would not match ticker metadata."
+            )
+        if any(self.ticker2idx[t] != i for i, t in enumerate(columns)):
+            raise ValueError(
+                "ticker2idx is not aligned with returns_df column order."
+            )
 
     def change_returns_period(self, period):
         """Allows us to change from daily to weekly etc.

@@ -74,7 +74,7 @@ class ContrastiveMultiPN(BaseModel):
             epoch_losses = {k: 0 for k in self.losses.keys()}
             # normalise the embeddings to prevent degenerate solution
             if normalize:
-                self.embeddings = self.normalize_embeddings(self.embeddings)
+                self.normalize_embeddings()
 
             for i, (anchor_idx, positive_idx, negative_indices) in enumerate(
                 data_loader
@@ -161,13 +161,14 @@ class ContrastiveMultiPN(BaseModel):
                     f"Remaining: {estimated_time_to_completion:.2f} sec,\n"
                 )
                 print(update_string)
-                get_sector_score(
-                    self.embeddings.weight.detach().numpy(),
-                    sectors=eval_sectors,
-                    top_k_accuracy=True,
-                    scale=True,
-                    smote=True,
-                )
+                if eval_sectors:
+                    get_sector_score(
+                        self.embeddings.weight.detach().numpy(),
+                        sectors=eval_sectors,
+                        top_k_accuracy=True,
+                        scale=True,
+                        smote=True,
+                    )
 
             if update_loss_weights:
                 self.criterion.update_loss_weights(
