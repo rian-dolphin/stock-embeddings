@@ -1,0 +1,31 @@
+[project]
+name = "stock-embeddings"
+version = "0.1.0"
+description = "Learning distributed representations (embeddings) for financial assets from returns time series"
+authors = [
+    { name = "rian-dolphin", email = "rdolphin98@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "imbalanced-learn>=0.14.2",
+    "numpy>=2.5.1",
+    "pandas>=3.0.3",
+    "plotly>=6.9.0",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.18.0",
+    "torch>=2.13.0",
+    "tqdm>=4.68.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+    "jupyter>=1.1.1",
+    "nbconvert>=7.17.1",
+    "nbformat>=5.10.4",
+    "pytest>=9.1.1",
+]
